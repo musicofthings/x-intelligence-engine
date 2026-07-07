@@ -1,0 +1,34 @@
+{
+  // API Worker — REST API, MCP endpoint, X webhook (spec §3.2, §37).
+  // Replace <PLACEHOLDER> ids after provisioning (see docs/CLOUDFLARE_SETUP.md).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xie-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "APP_ENV": "development",
+    "APP_VERSION": "local",
+    "WEB_ORIGIN": "http://localhost:5173",
+    "APP_TIMEZONE": "Asia/Kolkata",
+    "AUTH_MODE": "development",
+    "X_API_BASE_URL": "https://api.x.com",
+    "MCP_ALLOW_MUTATIONS": "false",
+    "ENABLE_RAW_ARCHIVE": "false",
+    "ENABLE_VECTOR_SEARCH": "false",
+    "LOG_LEVEL": "info"
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "xie-db", "database_id": "<D1_DATABASE_ID>", "migrations_dir": "../../packages/db/migrations" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "INGEST_QUEUE", "queue": "x-ingest-queue" },
+      { "binding": "SCREENING_QUEUE", "queue": "x-screening-queue" }
+    ]
+  }
+  // Secrets (set via `wrangler secret put`): X_BEARER_TOKEN, X_WEBHOOK_SECRET,
+  // ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MCP_API_TOKEN, CF_ACCESS_TEAM_DOMAIN,
+  // CF_ACCESS_AUD, ALLOWED_EMAILS, ALERT_WEBHOOK_URL, budget/pricing vars.
+}

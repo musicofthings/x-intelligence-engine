@@ -1,0 +1,27 @@
+{
+  "name": "@xie/api-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@xie/shared": "workspace:*",
+    "@xie/config": "workspace:*",
+    "@xie/db": "workspace:*",
+    "@xie/screening": "workspace:*",
+    "@xie/x-client": "workspace:*",
+    "@xie/mcp": "workspace:*",
+    "hono": "^4.6.15",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.7.3"
+  }
+}

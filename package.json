@@ -1,0 +1,28 @@
+{
+  "name": "x-intelligence-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private intelligence engine over the official X API with Claude screening and a remote MCP server.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build",
+    "deploy:api": "pnpm --filter @xie/api-worker deploy",
+    "deploy:pipeline": "pnpm --filter @xie/pipeline-worker deploy",
+    "deploy:web": "pnpm --filter @xie/web build && wrangler pages deploy apps/web/dist",
+    "deploy": "pnpm deploy:api && pnpm deploy:pipeline && pnpm deploy:web",
+    "db:migrate:local": "wrangler d1 migrations apply xie-db --local --config apps/api-worker/wrangler.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply xie-db --remote --config apps/api-worker/wrangler.jsonc"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  // Pipeline Worker — cron dispatcher + queue consumers (spec §3.3, §27, §28).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xie-pipeline",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "APP_ENV": "development",
+    "APP_VERSION": "local",
+    "APP_TIMEZONE": "Asia/Kolkata",
+    "X_API_BASE_URL": "https://api.x.com",
+    "HARD_STOP_ON_BUDGET_EXCEEDED": "true",
+    "ENABLE_RAW_ARCHIVE": "false",
+    "ENABLE_VECTOR_SEARCH": "false",
+    "LOG_LEVEL": "info"
+  },
+  "triggers": {
+    // Collection dispatcher every 15 min; daily digest 02:30 UTC (08:00 Asia/Kolkata);
+    // maintenance daily 03:00 UTC (spec §28).
+    "crons": ["*/15 * * * *", "30 2 * * *", "0 3 * * *"]
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "xie-db", "database_id": "<D1_DATABASE_ID>", "migrations_dir": "../../packages/db/migrations" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "INGEST_QUEUE", "queue": "x-ingest-queue" },
+      { "binding": "SCREENING_QUEUE", "queue": "x-screening-queue" }
+    ],
+    "consumers": [
+      { "queue": "x-ingest-queue", "max_batch_size": 10, "max_retries": 3, "dead_letter_queue": "x-ingest-dlq" },
+      { "queue": "x-screening-queue", "max_batch_size": 5, "max_retries": 3, "dead_letter_queue": "x-screening-dlq" }
+    ]
+  }
+  // Secrets: X_BEARER_TOKEN, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ALERT_WEBHOOK_URL,
+  // pricing + budget vars. Set via `wrangler secret put`.
+}
