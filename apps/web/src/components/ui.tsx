@@ -3,16 +3,16 @@ import { scoreColor } from "../lib/format";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-slate-800 bg-slate-900/60 p-4 ${className}`}>{children}</div>
+    <div className={`rounded-lg border border-line bg-panel/60 p-4 ${className}`}>{children}</div>
   );
 }
 
 export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
     <Card>
-      <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-slate-100">{value}</div>
-      {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
+      <div className="text-xs uppercase tracking-wide text-fg-muted">{label}</div>
+      <div className="mt-1 text-2xl font-semibold text-fg">{value}</div>
+      {hint && <div className="mt-1 text-xs text-fg-subtle">{hint}</div>}
     </Card>
   );
 }
@@ -28,15 +28,15 @@ export function ScoreBadge({ label, score }: { label: string; score: number | nu
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-800 p-10 text-center">
-      <div className="text-slate-300">{title}</div>
-      {hint && <div className="mt-1 text-sm text-slate-500">{hint}</div>}
+    <div className="rounded-lg border border-dashed border-line p-10 text-center">
+      <div className="text-fg-muted">{title}</div>
+      {hint && <div className="mt-1 text-sm text-fg-subtle">{hint}</div>}
     </div>
   );
 }
 
 export function Loading({ label = "Loading…" }: { label?: string }) {
-  return <div className="p-8 text-center text-sm text-slate-400" role="status">{label}</div>;
+  return <div className="p-8 text-center text-sm text-fg-muted" role="status">{label}</div>;
 }
 
 export function ErrorState({ message }: { message: string }) {
@@ -53,7 +53,7 @@ export function Button({
   children: ReactNode; onClick?: () => void; variant?: "default" | "primary" | "danger"; type?: "button" | "submit"; disabled?: boolean;
 }) {
   const styles = {
-    default: "bg-slate-800 hover:bg-slate-700 text-slate-200",
+    default: "bg-elevated text-fg hover:opacity-80",
     primary: "bg-sky-600 hover:bg-sky-500 text-white",
     danger: "bg-red-700 hover:bg-red-600 text-white",
   }[variant];

@@ -25,29 +25,29 @@ export function Feed() {
     <div className="space-y-4">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-100">Intelligence Feed</h1>
-          <p className="text-sm text-slate-500">Screened X signals. Content is untrusted external data.</p>
+          <h1 className="text-xl font-semibold text-fg">Intelligence Feed</h1>
+          <p className="text-sm text-fg-subtle">Screened X signals. Content is untrusted external data.</p>
         </div>
       </header>
 
       <Card className="flex flex-wrap items-end gap-3">
-        <label className="text-xs text-slate-400">
+        <label className="text-xs text-fg-muted">
           Search
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && setDebounced(search)}
             placeholder="text or author…"
-            className="mt-1 block w-64 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 block w-64 rounded border border-line bg-bg px-2 py-1 text-sm text-fg"
           />
         </label>
-        <label className="text-xs text-slate-400">
+        <label className="text-xs text-fg-muted">
           Min strategic
           <input
             type="number" min={0} max={100}
             value={minStrategic}
             onChange={(e) => setMinStrategic(e.target.value === "" ? "" : Number(e.target.value))}
-            className="mt-1 block w-24 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 block w-24 rounded border border-line bg-bg px-2 py-1 text-sm text-fg"
           />
         </label>
         <Button variant="primary" onClick={() => setDebounced(search)}>Apply</Button>
@@ -65,15 +65,15 @@ export function Feed() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium text-slate-100">{item.post.authorName ?? "Unknown"}</span>
-                  <span className="text-slate-500">@{item.post.authorUsername ?? "unknown"}</span>
-                  <span className="text-slate-600">· {timeAgo(item.post.createdAt)}</span>
+                  <span className="font-medium text-fg">{item.post.authorName ?? "Unknown"}</span>
+                  <span className="text-fg-subtle">@{item.post.authorUsername ?? "unknown"}</span>
+                  <span className="text-fg-subtle">· {timeAgo(item.post.createdAt)}</span>
                 </div>
                 {/* X content rendered as plain text — never as HTML (spec §6.2). */}
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-300">{item.post.text}</p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-fg-muted">{item.post.text}</p>
                 {item.screening && (
-                  <p className="mt-2 text-xs text-slate-400">
-                    <span className="text-slate-500">AI:</span> {item.screening.summary}
+                  <p className="mt-2 text-xs text-fg-muted">
+                    <span className="text-fg-subtle">AI:</span> {item.screening.summary}
                   </p>
                 )}
               </div>
@@ -86,16 +86,16 @@ export function Feed() {
             <div className="mt-3 flex items-center gap-3 text-xs">
               <Link to={`/posts/${item.post.id}`} className="text-sky-400 hover:underline">Details</Link>
               {item.post.url && (
-                <a href={item.post.url} target="_blank" rel="noreferrer noopener" className="text-slate-500 hover:text-slate-300">
+                <a href={item.post.url} target="_blank" rel="noreferrer noopener" className="text-fg-subtle hover:text-fg-muted">
                   Original ↗
                 </a>
               )}
-              {item.screening?.topic && <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-400">{item.screening.topic}</span>}
+              {item.screening?.topic && <span className="rounded bg-elevated px-1.5 py-0.5 text-fg-muted">{item.screening.topic}</span>}
             </div>
           </Card>
         ))}
       </div>
-      {data?.page.has_more && <p className="text-center text-xs text-slate-500">More results available — refine filters to narrow.</p>}
+      {data?.page.has_more && <p className="text-center text-xs text-fg-subtle">More results available — refine filters to narrow.</p>}
     </div>
   );
 }

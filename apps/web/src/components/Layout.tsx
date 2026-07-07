@@ -16,18 +16,23 @@ const NAV = [
 ];
 
 export function Layout() {
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem("xie-theme");
+    if (saved) return saved === "dark";
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true;
+  });
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("xie-theme", dark ? "dark" : "light");
   }, [dark]);
 
   return (
-    <div className="min-h-full bg-slate-950 text-slate-200">
+    <div className="min-h-full bg-bg text-fg">
       <div className="flex min-h-screen">
-        <aside className="w-56 shrink-0 border-r border-slate-800 bg-slate-900/40 p-4">
+        <aside className="w-56 shrink-0 border-r border-line bg-panel/40 p-4">
           <div className="mb-6">
-            <div className="text-sm font-semibold tracking-tight text-slate-100">X Intelligence Engine</div>
-            <div className="text-xs text-slate-500">XIE · analyst console</div>
+            <div className="text-sm font-semibold tracking-tight text-fg">X Intelligence Engine</div>
+            <div className="text-xs text-fg-subtle">XIE · analyst console</div>
           </div>
           <nav aria-label="Primary" className="space-y-1">
             {NAV.map((n) => (
@@ -36,7 +41,7 @@ export function Layout() {
                 to={n.to}
                 end={n.end}
                 className={({ isActive }) =>
-                  `block rounded px-3 py-1.5 text-sm ${isActive ? "bg-sky-600/20 text-sky-300" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"}`
+                  `block rounded px-3 py-1.5 text-sm ${isActive ? "bg-sky-600/20 text-sky-300" : "text-fg-muted hover:bg-elevated hover:text-fg"}`
                 }
               >
                 {n.label}
@@ -45,7 +50,7 @@ export function Layout() {
           </nav>
           <button
             onClick={() => setDark((d) => !d)}
-            className="mt-6 rounded px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800"
+            className="mt-6 rounded px-3 py-1.5 text-xs text-fg-muted hover:bg-elevated"
           >
             Toggle {dark ? "light" : "dark"} theme
           </button>

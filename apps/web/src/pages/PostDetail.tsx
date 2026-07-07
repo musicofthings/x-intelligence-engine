@@ -40,12 +40,12 @@ export function PostDetail() {
       <Link to="/posts" className="text-sm text-sky-400 hover:underline">← Back to feed</Link>
       <Card>
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium text-slate-100">{post.authorName}</span>
-          <span className="text-slate-500">@{post.authorUsername}</span>
-          <span className="text-slate-600">· {timeAgo(post.createdAt)}</span>
+          <span className="font-medium text-fg">{post.authorName}</span>
+          <span className="text-fg-subtle">@{post.authorUsername}</span>
+          <span className="text-fg-subtle">· {timeAgo(post.createdAt)}</span>
         </div>
-        <p className="mt-2 whitespace-pre-wrap break-words text-slate-200">{post.text}</p>
-        <div className="mt-3 flex gap-3 text-xs text-slate-500">
+        <p className="mt-2 whitespace-pre-wrap break-words text-fg">{post.text}</p>
+        <div className="mt-3 flex gap-3 text-xs text-fg-subtle">
           {Object.entries(post.metrics).map(([k, v]) => (
             <span key={k}>{k}: {v}</span>
           ))}
@@ -60,7 +60,7 @@ export function PostDetail() {
           </Button>
           <Button variant="danger" onClick={() => patchState.mutate({ is_dismissed: true })}>Dismiss</Button>
           {post.url && (
-            <a href={post.url} target="_blank" rel="noreferrer noopener" className="rounded bg-slate-800 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700">
+            <a href={post.url} target="_blank" rel="noreferrer noopener" className="rounded bg-elevated px-3 py-1.5 text-sm text-fg-muted hover:bg-elevated">
               Original ↗
             </a>
           )}
@@ -76,30 +76,30 @@ export function PostDetail() {
             <ScoreBadge label="strategic" score={screening.strategicImportanceScore} />
           </div>
           <dl className="space-y-2 text-sm">
-            <div><dt className="text-slate-500">Topic</dt><dd className="text-slate-200">{screening.topic} / {screening.subtopic}</dd></div>
-            <div><dt className="text-slate-500">Summary</dt><dd className="text-slate-200">{screening.summary}</dd></div>
-            <div><dt className="text-slate-500">Reason</dt><dd className="text-slate-300">{screening.reason}</dd></div>
-            <div><dt className="text-slate-500">Recommended action</dt><dd className="text-slate-300">{screening.recommendedAction}</dd></div>
+            <div><dt className="text-fg-subtle">Topic</dt><dd className="text-fg">{screening.topic} / {screening.subtopic}</dd></div>
+            <div><dt className="text-fg-subtle">Summary</dt><dd className="text-fg">{screening.summary}</dd></div>
+            <div><dt className="text-fg-subtle">Reason</dt><dd className="text-fg-muted">{screening.reason}</dd></div>
+            <div><dt className="text-fg-subtle">Recommended action</dt><dd className="text-fg-muted">{screening.recommendedAction}</dd></div>
             {screening.entities.length > 0 && (
               <div>
-                <dt className="text-slate-500">Entities</dt>
+                <dt className="text-fg-subtle">Entities</dt>
                 <dd className="flex flex-wrap gap-1">
                   {screening.entities.map((e, i) => (
-                    <span key={i} className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">{e.name} · {e.type}</span>
+                    <span key={i} className="rounded bg-elevated px-1.5 py-0.5 text-xs text-fg-muted">{e.name} · {e.type}</span>
                   ))}
                 </dd>
               </div>
             )}
           </dl>
-          <p className="mt-3 text-xs text-slate-600">Model {screening.model} · prompt {screening.promptVersion} · {timeAgo(screening.scoredAt)}</p>
+          <p className="mt-3 text-xs text-fg-subtle">Model {screening.model} · prompt {screening.promptVersion} · {timeAgo(screening.scoredAt)}</p>
         </Card>
       ) : (
-        <Card><p className="text-sm text-slate-500">Not yet screened by Claude.</p></Card>
+        <Card><p className="text-sm text-fg-subtle">Not yet screened by Claude.</p></Card>
       )}
 
-      <details className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-        <summary className="cursor-pointer text-sm text-slate-400">Raw source payload (developer view)</summary>
-        <pre className="mt-2 max-h-80 overflow-auto text-xs text-slate-500">{JSON.stringify(post.raw, null, 2)}</pre>
+      <details className="rounded-lg border border-line bg-panel/60 p-4">
+        <summary className="cursor-pointer text-sm text-fg-muted">Raw source payload (developer view)</summary>
+        <pre className="mt-2 max-h-80 overflow-auto text-xs text-fg-subtle">{JSON.stringify(post.raw, null, 2)}</pre>
       </details>
     </div>
   );

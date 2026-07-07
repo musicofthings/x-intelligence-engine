@@ -2,8 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Semantic theme tokens (space-separated RGB for Tailwind's alpha syntax).
+   Light is the default (:root); .dark on <html> overrides. The theme switcher in
+   Layout toggles that class. */
 :root {
-  color-scheme: dark light;
+  --bg: 248 250 252; /* slate-50 */
+  --panel: 255 255 255; /* white */
+  --elevated: 241 245 249; /* slate-100 */
+  --line: 226 232 240; /* slate-200 */
+  --fg: 15 23 42; /* slate-900 */
+  --fg-muted: 71 85 105; /* slate-600 */
+  --fg-subtle: 100 116 139; /* slate-500 */
+  color-scheme: light;
+}
+
+.dark {
+  --bg: 2 6 23; /* slate-950 */
+  --panel: 15 23 42; /* slate-900 */
+  --elevated: 30 41 59; /* slate-800 */
+  --line: 30 41 59; /* slate-800 */
+  --fg: 241 245 249; /* slate-100 */
+  --fg-muted: 148 163 184; /* slate-400 */
+  --fg-subtle: 100 116 139; /* slate-500 */
+  color-scheme: dark;
 }
 
 html,
@@ -16,6 +37,8 @@ body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--fg));
 }
 
 /* Respect reduced motion (spec §49). */

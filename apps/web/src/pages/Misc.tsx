@@ -14,14 +14,14 @@ export function Usage() {
   const u = data!.data;
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-100">Usage &amp; Cost</h1>
+      <h1 className="text-xl font-semibold text-fg">Usage &amp; Cost</h1>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="X reads today" value={u.x_resources_day} />
         <Stat label="X reads 30d" value={u.x_resources_month} />
         <Stat label="Est. X cost today" value={`$${u.estimated_x_cost_day_usd.toFixed(2)}`} />
         <Stat label="Claude calls today" value={u.claude_requests_day} />
       </div>
-      <p className="text-xs text-slate-500">{u.note}</p>
+      <p className="text-xs text-fg-subtle">{u.note}</p>
     </div>
   );
 }
@@ -37,22 +37,22 @@ export function Settings() {
   const { settings, capabilities } = data!.data;
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-100">Settings</h1>
+      <h1 className="text-xl font-semibold text-fg">Settings</h1>
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-slate-200">Capabilities</h2>
+        <h2 className="mb-2 text-sm font-semibold text-fg">Capabilities</h2>
         <ul className="space-y-1 text-sm">
           {Object.entries(capabilities).map(([k, v]) => (
-            <li key={k} className="flex justify-between border-b border-slate-800 py-1">
-              <span className="text-slate-400">{k}</span>
-              <span className="text-slate-200">{String(v)}</span>
+            <li key={k} className="flex justify-between border-b border-line py-1">
+              <span className="text-fg-muted">{k}</span>
+              <span className="text-fg">{String(v)}</span>
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-xs text-slate-500">Secret values (X bearer, Anthropic key, MCP token) are never sent to the browser.</p>
+        <p className="mt-2 text-xs text-fg-subtle">Secret values (X bearer, Anthropic key, MCP token) are never sent to the browser.</p>
       </Card>
       <Card>
-        <h2 className="mb-2 text-sm font-semibold text-slate-200">Configuration</h2>
-        <pre className="text-xs text-slate-400">{JSON.stringify(settings, null, 2)}</pre>
+        <h2 className="mb-2 text-sm font-semibold text-fg">Configuration</h2>
+        <pre className="text-xs text-fg-muted">{JSON.stringify(settings, null, 2)}</pre>
       </Card>
     </div>
   );
@@ -68,13 +68,13 @@ export function System() {
   if (error) return <ErrorState message={(error as Error).message} />;
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-100">System Health</h1>
+      <h1 className="text-xl font-semibold text-fg">System Health</h1>
       <Card>
         <ul className="space-y-1 text-sm">
           {Object.entries(data!.data).map(([k, v]) => (
-            <li key={k} className="flex justify-between border-b border-slate-800 py-1">
-              <span className="text-slate-400">{k}</span>
-              <span className="text-slate-200">{String(v)}</span>
+            <li key={k} className="flex justify-between border-b border-line py-1">
+              <span className="text-fg-muted">{k}</span>
+              <span className="text-fg">{String(v)}</span>
             </li>
           ))}
         </ul>
@@ -94,22 +94,22 @@ export function Sources() {
   if (data!.data.length === 0) return <EmptyState title="No sources ingested yet." />;
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-100">Sources</h1>
+      <h1 className="text-xl font-semibold text-fg">Sources</h1>
       <Card>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs uppercase text-slate-500">
+            <tr className="text-left text-xs uppercase text-fg-subtle">
               <th className="py-1">Handle</th><th>Name</th><th>Posts</th><th>Avg relevance</th><th>Last seen</th>
             </tr>
           </thead>
           <tbody>
             {data!.data.map((s) => (
-              <tr key={s.username} className="border-t border-slate-800">
-                <td className="py-1 text-slate-300">@{s.username}</td>
-                <td className="text-slate-400">{s.name}</td>
+              <tr key={s.username} className="border-t border-line">
+                <td className="py-1 text-fg-muted">@{s.username}</td>
+                <td className="text-fg-muted">{s.name}</td>
                 <td>{s.posts}</td>
                 <td>{s.avg_relevance != null ? Math.round(s.avg_relevance) : "—"}</td>
-                <td className="text-slate-500">{timeAgo(s.last_seen)}</td>
+                <td className="text-fg-subtle">{timeAgo(s.last_seen)}</td>
               </tr>
             ))}
           </tbody>
@@ -130,14 +130,14 @@ export function Rules() {
   if (data!.data.length === 0) return <EmptyState title="No rules defined." />;
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-100">Rules</h1>
+      <h1 className="text-xl font-semibold text-fg">Rules</h1>
       {data!.data.map((r) => (
         <Card key={r.monitor_id}>
           <div className="flex items-center justify-between">
-            <span className="font-medium text-slate-200">{r.name}</span>
-            <span className={`text-xs ${r.active ? "text-teal-300" : "text-slate-500"}`}>{r.active ? "active" : "inactive"}</span>
+            <span className="font-medium text-fg">{r.name}</span>
+            <span className={`text-xs ${r.active ? "text-teal-300" : "text-fg-subtle"}`}>{r.active ? "active" : "inactive"}</span>
           </div>
-          <code className="mt-1 block break-words text-xs text-slate-400">{r.query}</code>
+          <code className="mt-1 block break-words text-xs text-fg-muted">{r.query}</code>
         </Card>
       ))}
     </div>
@@ -148,7 +148,7 @@ export function Rules() {
 export function Watchlists() {
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-100">Watchlists</h1>
+      <h1 className="text-xl font-semibold text-fg">Watchlists</h1>
       <EmptyState
         title="No watchlists configured."
         hint="Create curated account groups (AI Labs, Genomics Companies, Oncology KOLs). Handles resolve to IDs via the official X API."

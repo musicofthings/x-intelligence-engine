@@ -5,7 +5,7 @@ import { timeAgo } from "../lib/format";
 import type { Alert } from "../lib/types";
 
 const SEV: Record<Alert["severity"], string> = {
-  info: "bg-slate-700 text-slate-300",
+  info: "bg-elevated text-fg-muted",
   medium: "bg-teal-500/20 text-teal-300",
   high: "bg-amber-500/20 text-amber-300",
   critical: "bg-red-600/20 text-red-300",
@@ -24,7 +24,7 @@ export function Alerts() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-slate-100">Alerts</h1>
+      <h1 className="text-xl font-semibold text-fg">Alerts</h1>
       {data!.data.length === 0 && <EmptyState title="No high-priority signals in this period." />}
       <div className="space-y-3">
         {data!.data.map((a) => (
@@ -33,11 +33,11 @@ export function Alerts() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${SEV[a.severity]}`}>{a.severity}</span>
-                  <span className="font-medium text-slate-100">{a.title}</span>
-                  <span className="text-xs text-slate-500">{a.status}</span>
+                  <span className="font-medium text-fg">{a.title}</span>
+                  <span className="text-xs text-fg-subtle">{a.status}</span>
                 </div>
-                <p className="mt-1 text-sm text-slate-400">{a.reason}</p>
-                <p className="mt-1 text-xs text-slate-600">{timeAgo(a.createdAt)}</p>
+                <p className="mt-1 text-sm text-fg-muted">{a.reason}</p>
+                <p className="mt-1 text-xs text-fg-subtle">{timeAgo(a.createdAt)}</p>
               </div>
               <div className="flex shrink-0 gap-2">
                 <Button onClick={() => patch.mutate({ id: a.id, status: "acknowledged" })}>Ack</Button>

@@ -28,8 +28,8 @@ export function Monitors() {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold text-slate-100">Monitors</h1>
-        <p className="text-sm text-slate-500">Collection is disabled by default to avoid unexpected X API cost.</p>
+        <h1 className="text-xl font-semibold text-fg">Monitors</h1>
+        <p className="text-sm text-fg-subtle">Collection is disabled by default to avoid unexpected X API cost.</p>
       </header>
       {runNote && <div className="rounded border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-300">{runNote}</div>}
       {data!.data.length === 0 && <EmptyState title="No monitors are configured." />}
@@ -39,14 +39,14 @@ export function Monitors() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-100">{m.name}</span>
-                  <span className={`rounded px-1.5 py-0.5 text-xs ${m.enabled ? "bg-teal-500/20 text-teal-300" : "bg-slate-700 text-slate-400"}`}>
+                  <span className="font-medium text-fg">{m.name}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${m.enabled ? "bg-teal-500/20 text-teal-300" : "bg-elevated text-fg-muted"}`}>
                     {m.enabled ? "enabled" : "disabled"}
                   </span>
-                  <span className="text-xs text-slate-500">{m.type}</span>
+                  <span className="text-xs text-fg-subtle">{m.type}</span>
                 </div>
-                {m.xQuery && <code className="mt-1 block truncate text-xs text-slate-400">{m.xQuery}</code>}
-                <div className="mt-1 text-xs text-slate-500">
+                {m.xQuery && <code className="mt-1 block truncate text-xs text-fg-muted">{m.xQuery}</code>}
+                <div className="mt-1 text-xs text-fg-subtle">
                   every {m.pollIntervalMinutes}m · max {m.maxResultsPerRun}/run · prefilter ≥ {m.prefilterThreshold} · last success {timeAgo(m.lastSuccessAt)}
                 </div>
                 {m.lastError && <div className="mt-1 text-xs text-red-400">last error: {m.lastError}</div>}
