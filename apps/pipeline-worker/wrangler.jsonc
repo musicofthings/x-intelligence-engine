@@ -22,7 +22,7 @@
     "crons": ["*/15 * * * *", "30 2 * * *", "0 3 * * *"]
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "xie-db", "database_id": "<D1_DATABASE_ID>", "migrations_dir": "../../packages/db/migrations" }
+    { "binding": "DB", "database_name": "xie-db", "database_id": "548976f8-2290-413e-bf2a-003e1f881263", "migrations_dir": "../../packages/db/migrations" }
   ],
   "queues": {
     "producers": [

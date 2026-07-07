@@ -5,6 +5,8 @@ dist/
 .env
 .env.*
 !.env.example
+# Public build-time API URL (no secrets) — safe to track for reproducible builds.
+!apps/web/.env.production
 *.log
 coverage/
 .DS_Store
@@ -12,3 +14,6 @@ coverage/
 *.tsbuildinfo
 apps/web/dist/
 .vitest/
+
+# Contains a live MCP token pasted during setup — keep out of git.
+docs/CLOUDFLARE_SETUP.md

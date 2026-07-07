@@ -10,7 +10,7 @@
   "vars": {
     "APP_ENV": "development",
     "APP_VERSION": "local",
-    "WEB_ORIGIN": "http://localhost:5173",
+    "WEB_ORIGIN": "https://xie-web.pages.dev",
     "APP_TIMEZONE": "Asia/Kolkata",
     "AUTH_MODE": "development",
     "X_API_BASE_URL": "https://api.x.com",
@@ -20,7 +20,7 @@
     "LOG_LEVEL": "info"
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "xie-db", "database_id": "<D1_DATABASE_ID>", "migrations_dir": "../../packages/db/migrations" }
+    { "binding": "DB", "database_name": "xie-db", "database_id": "548976f8-2290-413e-bf2a-003e1f881263", "migrations_dir": "../../packages/db/migrations" }
   ],
   "queues": {
     "producers": [
