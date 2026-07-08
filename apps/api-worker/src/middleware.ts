@@ -3,6 +3,7 @@ import { loadEnv, allowedEmails } from "@xie/config";
 import { Repositories } from "@xie/db";
 import { createLogger, AppError, isAppError, toAppError } from "@xie/shared";
 import type { HonoEnv, Bindings } from "./bindings.js";
+import { verifyAccessJwt, fetchJwks, accessIssuer } from "./access.js";
 
 /** Build env/repos/logger and attach a request id (spec §34, §35). */
 export const contextMiddleware: MiddlewareHandler<HonoEnv> = async (c, next) => {
@@ -52,15 +53,37 @@ export const authMiddleware: MiddlewareHandler<HonoEnv> = async (c, next) => {
     c.set("actor", "dev@localhost");
     return next();
   }
-  // Cloudflare Access injects the verified user email; the platform verifies the JWT
-  // upstream. We additionally enforce the allow-list.
-  const email = c.req.header("Cf-Access-Authenticated-User-Email")?.toLowerCase();
-  const allow = allowedEmails(env);
-  if (!email) throw new AppError("AUTHENTICATION_ERROR");
-  if (allow.length > 0 && !allow.includes(email)) throw new AppError("AUTHORIZATION_ERROR");
+  // Production: cryptographically verify the Cloudflare Access JWT. We do NOT trust the
+  // Cf-Access-Authenticated-User-Email header on its own (it could be spoofed on a
+  // directly-reachable worker). Requires CF_ACCESS_TEAM_DOMAIN + CF_ACCESS_AUD.
+  if (!env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUD) {
+    throw new AppError("CONFIGURATION_ERROR", "Cloudflare Access is not configured");
+  }
+  const token =
+    c.req.header("Cf-Access-Jwt-Assertion") ?? cookieValue(c.req.header("cookie"), "CF_Authorization");
+  if (!token) throw new AppError("AUTHENTICATION_ERROR");
+
+  const nowMs = Date.now();
+  const jwks = await fetchJwks(env.CF_ACCESS_TEAM_DOMAIN, nowMs);
+  const { email } = await verifyAccessJwt(token, {
+    jwks,
+    aud: env.CF_ACCESS_AUD,
+    issuer: accessIssuer(env.CF_ACCESS_TEAM_DOMAIN),
+    allowedEmails: allowedEmails(env),
+    nowSec: Math.floor(nowMs / 1000),
+  });
   c.set("actor", email);
   return next();
 };
+
+function cookieValue(cookieHeader: string | undefined, name: string): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const part of cookieHeader.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return v.join("=");
+  }
+  return undefined;
+}
 
 /** Consistent error envelope; never leaks stack/detail to clients (spec §34). */
 export const errorHandler = (err: Error, c: { get: (k: "logger") => ReturnType<typeof createLogger>; get2?: unknown } & any) => {
