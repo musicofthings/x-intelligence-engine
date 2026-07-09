@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Envelope } from "../lib/api";
-import { Card, Stat, Loading, ErrorState, EmptyState } from "../components/ui";
+import { Card, Stat, Loading, ErrorState, EmptyState, Button } from "../components/ui";
 import { timeAgo } from "../lib/format";
 
 /** Usage & Cost (spec §6.10). */
@@ -58,26 +59,109 @@ export function Settings() {
   );
 }
 
-/** System health (spec §6.12). */
+/** System health + maintenance (spec §6.12, §51). */
 export function System() {
-  const { data, isLoading, error } = useQuery({
+  const qc = useQueryClient();
+  const status = useQuery({
     queryKey: ["system"],
     queryFn: () => api.get<Envelope<Record<string, unknown>>>("/system/status"),
   });
-  if (isLoading) return <Loading />;
-  if (error) return <ErrorState message={(error as Error).message} />;
+  const stats = useQuery({
+    queryKey: ["maintenance-stats"],
+    queryFn: () => api.get<Envelope<Record<string, number>>>("/system/maintenance/stats"),
+  });
+  const [purgeDays, setPurgeDays] = useState(90);
+  const [note, setNote] = useState<string | null>(null);
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["maintenance-stats"] });
+    qc.invalidateQueries({ queryKey: ["dashboard"] });
+  };
+
+  const action = useMutation({
+    mutationFn: (a: { path: string; body?: unknown; label: string }) =>
+      api.post<Envelope<Record<string, unknown>>>(a.path, a.body).then((r) => ({ r, label: a.label })),
+    onSuccess: ({ r, label }) => {
+      const cleared = (r.data.deleted ?? r.data.reset ?? "done") as unknown;
+      setNote(`${label}: ${typeof cleared === "number" ? `${cleared} rows` : "done"}`);
+      refresh();
+    },
+    onError: (e) => setNote((e as Error).message),
+  });
+
+  const run = (path: string, label: string, confirmMsg: string, body?: unknown) => {
+    if (!window.confirm(confirmMsg)) return;
+    action.mutate({ path, body, label });
+  };
+
+  const resetAll = () => {
+    const typed = window.prompt('This deletes ALL collected posts, screenings, alerts, digests, runs and usage. Monitors, watchlists and settings are kept.\n\nType RESET to confirm:');
+    if (typed !== "RESET") return;
+    action.mutate({ path: "/system/maintenance/reset-intelligence", body: { confirm: "RESET", reset_checkpoints: true }, label: "Reset all data" });
+  };
+
+  if (status.isLoading) return <Loading />;
+  if (status.error) return <ErrorState message={(status.error as Error).message} />;
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold text-fg">System Health</h1>
+
       <Card>
+        <h2 className="mb-2 text-sm font-semibold text-fg">Status</h2>
         <ul className="space-y-1 text-sm">
-          {Object.entries(data!.data).map(([k, v]) => (
+          {Object.entries(status.data!.data).map(([k, v]) => (
             <li key={k} className="flex justify-between border-b border-line py-1">
               <span className="text-fg-muted">{k}</span>
               <span className="text-fg">{String(v)}</span>
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card>
+        <h2 className="mb-2 text-sm font-semibold text-fg">Database</h2>
+        {stats.data ? (
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+            {Object.entries(stats.data.data).map(([t, n]) => (
+              <div key={t} className="rounded bg-elevated px-2 py-1">
+                <div className="text-xs text-fg-subtle">{t}</div>
+                <div className="text-fg">{n}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-fg-subtle">Loading counts…</p>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold text-fg">Maintenance</h2>
+        <p className="mb-3 text-xs text-fg-subtle">Destructive actions are audited. Monitors, watchlists and settings are never touched by these.</p>
+        {note && <div className="mb-3 rounded border border-line bg-elevated px-3 py-2 text-xs text-fg">{note}</div>}
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => run("/system/maintenance/clear-runs", "Cleared runs", "Delete all ingestion run history?")}>Reset recent runs</Button>
+          <Button onClick={() => run("/system/maintenance/clear-alerts", "Cleared alerts", "Delete all alerts?")}>Clear alerts</Button>
+          <Button onClick={() => run("/system/maintenance/clear-usage", "Cleared usage", "Delete all usage/cost history?")}>Clear usage history</Button>
+          <Button onClick={() => run("/system/maintenance/clear-digests", "Cleared digests", "Delete all digests?")}>Clear digests</Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <label className="text-xs text-fg-muted">
+            Purge posts older than (days)
+            <input
+              type="number" min={1} max={3650} value={purgeDays}
+              onChange={(e) => setPurgeDays(Number(e.target.value))}
+              className="mt-1 block w-28 rounded border border-line bg-bg px-2 py-1 text-sm text-fg"
+            />
+          </label>
+          <Button onClick={() => run("/system/maintenance/purge-old", `Purged posts older than ${purgeDays}d`, `Delete posts older than ${purgeDays} days? Starred posts are always kept.`, { days: purgeDays })}>
+            Purge old posts
+          </Button>
+        </div>
+        <div className="mt-5 border-t border-line pt-3">
+          <Button variant="danger" onClick={resetAll}>Reset all data</Button>
+          <p className="mt-1 text-xs text-fg-subtle">Wipes all collected intelligence and re-arms monitor checkpoints. Requires typing RESET.</p>
+        </div>
       </Card>
     </div>
   );
@@ -144,15 +228,3 @@ export function Rules() {
   );
 }
 
-/** Watchlists (spec §6.5) — placeholder list; CRUD via API when configured. */
-export function Watchlists() {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold text-fg">Watchlists</h1>
-      <EmptyState
-        title="No watchlists configured."
-        hint="Create curated account groups (AI Labs, Genomics Companies, Oncology KOLs). Handles resolve to IDs via the official X API."
-      />
-    </div>
-  );
-}

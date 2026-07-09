@@ -59,3 +59,22 @@ export interface Digest {
   executiveSummary: string | null;
   contentMarkdown: string | null;
 }
+
+export interface Watchlist {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  enabled: boolean;
+  accountCount?: number;
+}
+
+export interface WatchlistAccount {
+  id: string;
+  watchlistId: string;
+  username: string;
+  displayName: string | null;
+  priority: number;
+  tags: string[];
+  notes: string | null;
+}

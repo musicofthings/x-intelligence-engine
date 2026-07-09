@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { AppError } from "@xie/shared";
 import { queryFeed } from "@xie/db";
@@ -235,6 +235,79 @@ export function apiRoutes(): Hono<HonoEnv> {
     return c.json({ data: { updated: true } });
   });
 
+  // Create a standalone analyst alert (not tied to a post).
+  app.post("/alerts", async (c) => {
+    const body = z
+      .object({
+        title: z.string().min(1).max(200),
+        reason: z.string().min(1).max(2000),
+        severity: z.enum(["info", "medium", "high", "critical"]).default("medium"),
+      })
+      .parse(await c.req.json());
+    const id = await c.get("repo").createManualAlert(body);
+    return c.json({ data: { id } }, 201);
+  });
+
+  // ── Watchlists (spec §6.5) ──────────────────────────────────────────────────
+  app.get("/watchlists", async (c) => c.json({ data: await c.get("repo").listWatchlists() }));
+
+  app.get("/watchlists/:id", async (c) => {
+    const repo = c.get("repo");
+    const wl = await repo.getWatchlist(c.req.param("id"));
+    if (!wl) throw new AppError("NOT_FOUND");
+    const accounts = await repo.listWatchlistAccounts(wl.id);
+    return c.json({ data: { watchlist: wl, accounts } });
+  });
+
+  const watchlistBody = z.object({
+    name: z.string().min(1).max(120),
+    slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/),
+    description: z.string().max(1000).optional(),
+  });
+  app.post("/watchlists", async (c) => {
+    const b = watchlistBody.parse(await c.req.json());
+    const id = await c.get("repo").createWatchlist({ name: b.name, slug: b.slug, description: b.description ?? null });
+    return c.json({ data: { id } }, 201);
+  });
+
+  app.patch("/watchlists/:id", async (c) => {
+    const repo = c.get("repo");
+    const id = c.req.param("id");
+    if (!(await repo.getWatchlist(id))) throw new AppError("NOT_FOUND");
+    const body = z.object({ enabled: z.boolean() }).parse(await c.req.json());
+    await repo.setWatchlistEnabled(id, body.enabled);
+    return c.json({ data: { updated: true } });
+  });
+
+  app.delete("/watchlists/:id", async (c) => {
+    await c.get("repo").deleteWatchlist(c.req.param("id"));
+    return c.json({ data: { deleted: true } });
+  });
+
+  const accountBody = z.object({
+    username: z.string().min(1).max(30),
+    display_name: z.string().max(120).optional(),
+    priority: z.number().int().min(0).max(100).optional(),
+    tags: z.array(z.string().max(40)).max(20).optional(),
+    notes: z.string().max(1000).optional(),
+  });
+  app.post("/watchlists/:id/accounts", async (c) => {
+    const repo = c.get("repo");
+    const id = c.req.param("id");
+    if (!(await repo.getWatchlist(id))) throw new AppError("NOT_FOUND");
+    const b = accountBody.parse(await c.req.json());
+    const accountId = await repo.addWatchlistAccount(id, {
+      username: b.username, displayName: b.display_name ?? null, priority: b.priority ?? 50,
+      tags: b.tags ?? [], notes: b.notes ?? null,
+    });
+    return c.json({ data: { id: accountId } }, 201);
+  });
+
+  app.delete("/watchlists/:id/accounts/:accountId", async (c) => {
+    await c.get("repo").removeWatchlistAccount(c.req.param("id"), c.req.param("accountId"));
+    return c.json({ data: { deleted: true } });
+  });
+
   // ── Digests ────────────────────────────────────────────────────────────────
   app.get("/digests", async (c) => c.json({ data: await c.get("repo").listDigests() }));
   app.get("/digests/:id", async (c) => {
@@ -366,6 +439,55 @@ export function apiRoutes(): Hono<HonoEnv> {
     return c.json({ data: runs });
   });
   app.get("/system/runs", async (c) => c.json({ data: await c.get("repo").recentRuns(50) }));
+
+  // ── Maintenance (spec §51) — destructive; audited; preserves config ─────────
+  app.get("/system/maintenance/stats", async (c) => c.json({ data: await c.get("repo").maintenanceStats() }));
+
+  const audit = async (c: Context<HonoEnv>, action: string, meta?: Record<string, unknown>) => {
+    await c.get("repo").writeAudit(c.get("actor"), action, "maintenance", null, meta);
+  };
+
+  app.post("/system/maintenance/clear-runs", async (c) => {
+    const n = await c.get("repo").clearRuns();
+    await audit(c, "clear_runs", { deleted: n });
+    return c.json({ data: { deleted: n } });
+  });
+
+  app.post("/system/maintenance/clear-alerts", async (c) => {
+    const n = await c.get("repo").clearAlerts();
+    await audit(c, "clear_alerts", { deleted: n });
+    return c.json({ data: { deleted: n } });
+  });
+
+  app.post("/system/maintenance/clear-usage", async (c) => {
+    const n = await c.get("repo").clearUsage();
+    await audit(c, "clear_usage", { deleted: n });
+    return c.json({ data: { deleted: n } });
+  });
+
+  app.post("/system/maintenance/clear-digests", async (c) => {
+    const n = await c.get("repo").clearDigests();
+    await audit(c, "clear_digests", { deleted: n });
+    return c.json({ data: { deleted: n } });
+  });
+
+  app.post("/system/maintenance/purge-old", async (c) => {
+    const body = z.object({ days: z.number().int().min(1).max(3650) }).parse(await c.req.json());
+    const cutoff = new Date(Date.now() - body.days * 86_400_000).toISOString();
+    const n = await c.get("repo").purgeOldPosts(cutoff);
+    await audit(c, "purge_old_posts", { days: body.days, deleted: n });
+    return c.json({ data: { deleted: n, cutoff } });
+  });
+
+  // Full data reset — preserves monitors/watchlists/settings. Requires explicit confirm.
+  app.post("/system/maintenance/reset-intelligence", async (c) => {
+    const body = z
+      .object({ confirm: z.literal("RESET"), reset_checkpoints: z.boolean().optional() })
+      .parse(await c.req.json());
+    const before = await c.get("repo").resetIntelligence({ resetCheckpoints: body.reset_checkpoints ?? true });
+    await audit(c, "reset_intelligence", { before, reset_checkpoints: body.reset_checkpoints ?? true });
+    return c.json({ data: { reset: true, cleared: before } });
+  });
 
   return app;
 }

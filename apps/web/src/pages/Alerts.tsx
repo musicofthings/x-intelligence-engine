@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Envelope } from "../lib/api";
 import { Card, Loading, ErrorState, EmptyState, Button } from "../components/ui";
 import { timeAgo } from "../lib/format";
 import type { Alert } from "../lib/types";
+
+const SEVERITIES: Alert["severity"][] = ["info", "medium", "high", "critical"];
 
 const SEV: Record<Alert["severity"], string> = {
   info: "bg-elevated text-fg-muted",
@@ -19,12 +22,58 @@ export function Alerts() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
 
+  const [title, setTitle] = useState("");
+  const [reason, setReason] = useState("");
+  const [severity, setSeverity] = useState<Alert["severity"]>("medium");
+  const create = useMutation({
+    mutationFn: () => api.post("/alerts", { title, reason, severity }),
+    onSuccess: () => { setTitle(""); setReason(""); setSeverity("medium"); qc.invalidateQueries({ queryKey: ["alerts"] }); },
+  });
+
   if (isLoading) return <Loading />;
   if (error) return <ErrorState message={(error as Error).message} />;
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold text-fg">Alerts</h1>
+
+      <Card>
+        <h2 className="mb-2 text-sm font-semibold text-fg">New alert</h2>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs text-fg-muted">
+            Title
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Short summary"
+              className="mt-1 block w-64 rounded border border-line bg-bg px-2 py-1 text-sm text-fg"
+            />
+          </label>
+          <label className="text-xs text-fg-muted">
+            Severity
+            <select
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value as Alert["severity"])}
+              className="mt-1 block rounded border border-line bg-bg px-2 py-1 text-sm text-fg"
+            >
+              {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="w-full text-xs text-fg-muted sm:w-auto sm:flex-1">
+            Reason
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why this matters"
+              className="mt-1 block w-full rounded border border-line bg-bg px-2 py-1 text-sm text-fg"
+            />
+          </label>
+          <Button variant="primary" disabled={!title.trim() || !reason.trim() || create.isPending} onClick={() => create.mutate()}>
+            Create alert
+          </Button>
+        </div>
+      </Card>
+
       {data!.data.length === 0 && <EmptyState title="No high-priority signals in this period." />}
       <div className="space-y-3">
         {data!.data.map((a) => (

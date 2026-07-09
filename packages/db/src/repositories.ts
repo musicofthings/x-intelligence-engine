@@ -10,6 +10,8 @@ import type {
   IngestionRun,
   IngestionRunStatus,
   PostState,
+  Watchlist,
+  WatchlistAccount,
   CursorPage,
 } from "@xie/shared";
 import { isMonitorDue } from "@xie/config";
@@ -22,6 +24,8 @@ import {
   rowToAlert,
   rowToDigest,
   rowToRun,
+  rowToWatchlist,
+  rowToWatchlistAccount,
   type PostRow,
 } from "./rows.js";
 
@@ -304,6 +308,91 @@ export class Repositories {
       .run();
   }
 
+  /** Analyst-created standalone alert (no post/monitor). Requires migration 0004. */
+  async createManualAlert(a: { severity: AlertSeverity; title: string; reason: string }): Promise<string> {
+    const id = this.ids.next("alr");
+    await this.db
+      .prepare(
+        `INSERT INTO alerts (id,post_id,monitor_id,severity,title,reason,status,created_at)
+         VALUES (?, NULL, NULL, ?, ?, ?, 'open', ?)`,
+      )
+      .bind(id, a.severity, a.title, a.reason, this.clock.nowIso())
+      .run();
+    return id;
+  }
+
+  // ── Watchlists (spec §6.5) ──────────────────────────────────────────────────
+  async listWatchlists(): Promise<(Watchlist & { accountCount: number })[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT w.*, (SELECT COUNT(*) FROM watchlist_accounts a WHERE a.watchlist_id = w.id) AS account_count
+         FROM watchlists w ORDER BY w.name`,
+      )
+      .all();
+    return results.map((r) => ({ ...rowToWatchlist(r), accountCount: Number((r as { account_count?: number }).account_count ?? 0) }));
+  }
+
+  async getWatchlist(id: string): Promise<Watchlist | null> {
+    const r = await this.db.prepare("SELECT * FROM watchlists WHERE id=?").bind(id).first();
+    return r ? rowToWatchlist(r) : null;
+  }
+
+  async createWatchlist(w: { name: string; slug: string; description?: string | null }): Promise<string> {
+    const id = this.ids.next("wl");
+    const now = this.clock.nowIso();
+    await this.db
+      .prepare(
+        `INSERT INTO watchlists (id,name,slug,description,enabled,created_at,updated_at)
+         VALUES (?,?,?,?,1,?,?)`,
+      )
+      .bind(id, w.name, w.slug, w.description ?? null, now, now)
+      .run();
+    return id;
+  }
+
+  async setWatchlistEnabled(id: string, enabled: boolean): Promise<void> {
+    await this.db.prepare("UPDATE watchlists SET enabled=?, updated_at=? WHERE id=?")
+      .bind(enabled ? 1 : 0, this.clock.nowIso(), id).run();
+  }
+
+  async deleteWatchlist(id: string): Promise<void> {
+    await this.db.prepare("DELETE FROM watchlists WHERE id=?").bind(id).run();
+  }
+
+  async listWatchlistAccounts(watchlistId: string): Promise<WatchlistAccount[]> {
+    const { results } = await this.db
+      .prepare("SELECT * FROM watchlist_accounts WHERE watchlist_id=? ORDER BY priority DESC, username")
+      .bind(watchlistId)
+      .all();
+    return results.map(rowToWatchlistAccount);
+  }
+
+  async addWatchlistAccount(
+    watchlistId: string,
+    a: { username: string; displayName?: string | null; priority?: number; tags?: string[]; notes?: string | null },
+  ): Promise<string> {
+    const id = this.ids.next("wla");
+    const now = this.clock.nowIso();
+    const username = a.username.replace(/^@/, "").trim();
+    await this.db
+      .prepare(
+        `INSERT INTO watchlist_accounts (id,watchlist_id,username,display_name,priority,tags_json,notes,enabled,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,1,?,?)
+         ON CONFLICT (watchlist_id, username) DO UPDATE SET
+           display_name=excluded.display_name, priority=excluded.priority, tags_json=excluded.tags_json,
+           notes=excluded.notes, updated_at=excluded.updated_at`,
+      )
+      .bind(id, watchlistId, username, a.displayName ?? null, a.priority ?? 50,
+        JSON.stringify(a.tags ?? []), a.notes ?? null, now, now)
+      .run();
+    return id;
+  }
+
+  async removeWatchlistAccount(watchlistId: string, accountId: string): Promise<void> {
+    await this.db.prepare("DELETE FROM watchlist_accounts WHERE id=? AND watchlist_id=?")
+      .bind(accountId, watchlistId).run();
+  }
+
   // ── Ingestion runs (idempotent per run_key) ────────────────────────────────
   async startRun(monitorId: string, runKey: string, status: IngestionRunStatus): Promise<string> {
     const id = this.ids.next("run");
@@ -467,6 +556,95 @@ export class Repositories {
       if (screening) out.push({ post, screening });
     }
     return out;
+  }
+
+  // ── Maintenance (spec §51) ───────────────────────────────────────────────
+  private async countOf(table: string): Promise<number> {
+    // `table` is never user-supplied — only the fixed whitelist below calls this.
+    const r = await this.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>();
+    return r?.n ?? 0;
+  }
+
+  async maintenanceStats(): Promise<Record<string, number>> {
+    const tables = [
+      "posts", "screening_results", "prefilter_results", "post_monitor_matches",
+      "alerts", "digests", "ingestion_runs", "api_usage", "jobs", "webhook_events", "monitors",
+    ];
+    const out: Record<string, number> = {};
+    for (const t of tables) out[t] = await this.countOf(t);
+    return out;
+  }
+
+  async clearRuns(): Promise<number> {
+    const r = await this.db.prepare("DELETE FROM ingestion_runs").run();
+    return r.meta?.changes ?? 0;
+  }
+
+  async clearAlerts(): Promise<number> {
+    const r = await this.db.prepare("DELETE FROM alerts").run();
+    return r.meta?.changes ?? 0;
+  }
+
+  async clearUsage(): Promise<number> {
+    const r = await this.db.prepare("DELETE FROM api_usage").run();
+    return r.meta?.changes ?? 0;
+  }
+
+  async clearDigests(): Promise<number> {
+    // digest_items cascade via FK ON DELETE CASCADE.
+    const r = await this.db.prepare("DELETE FROM digests").run();
+    return r.meta?.changes ?? 0;
+  }
+
+  /**
+   * Delete all collected intelligence but PRESERVE configuration (monitors, watchlists,
+   * settings). Deleting posts cascades matches/prefilter/screening/states/alerts/digest_items.
+   * Optionally reset monitor checkpoints so they re-collect from scratch.
+   */
+  async resetIntelligence(opts: { resetCheckpoints?: boolean } = {}): Promise<Record<string, number>> {
+    const before = await this.maintenanceStats();
+    await this.db.prepare("DELETE FROM posts").run();
+    await this.db.prepare("DELETE FROM digests").run();
+    await this.db.prepare("DELETE FROM ingestion_runs").run();
+    await this.db.prepare("DELETE FROM api_usage").run();
+    await this.db.prepare("DELETE FROM jobs").run();
+    await this.db.prepare("DELETE FROM webhook_events").run();
+    if (opts.resetCheckpoints) {
+      await this.db
+        .prepare(
+          `UPDATE monitors SET since_id=NULL, pagination_state_json=NULL, last_run_at=NULL,
+             last_success_at=NULL, last_error=NULL, updated_at=?`,
+        )
+        .bind(this.clock.nowIso())
+        .run();
+    }
+    return before;
+  }
+
+  /** Retention purge: delete posts older than cutoff, never touching starred posts (spec §51). */
+  async purgeOldPosts(cutoffIso: string): Promise<number> {
+    const r = await this.db
+      .prepare(
+        `DELETE FROM posts WHERE created_at < ?
+           AND id NOT IN (SELECT post_id FROM post_states WHERE is_starred = 1)`,
+      )
+      .bind(cutoffIso)
+      .run();
+    return r.meta?.changes ?? 0;
+  }
+
+  async writeAudit(
+    actor: string | null, action: string,
+    entityType?: string | null, entityId?: string | null, metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    await this.db
+      .prepare(
+        `INSERT INTO audit_log (id,actor,action,entity_type,entity_id,metadata_json,created_at)
+         VALUES (?,?,?,?,?,?,?)`,
+      )
+      .bind(this.ids.next("aud"), actor, action, entityType ?? null, entityId ?? null,
+        metadata ? JSON.stringify(metadata) : null, this.clock.nowIso())
+      .run();
   }
 }
 

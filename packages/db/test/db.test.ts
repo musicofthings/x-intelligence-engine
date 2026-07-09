@@ -124,6 +124,96 @@ describe("usage accounting", () => {
   });
 });
 
+describe("watchlists", () => {
+  it("creates, lists with counts, adds/removes accounts, and deletes", async () => {
+    const { repo } = repos();
+    const id = await repo.createWatchlist({ name: "Oncology KOLs", slug: "oncology-kols" });
+    let lists = await repo.listWatchlists();
+    expect(lists).toHaveLength(1);
+    expect(lists[0]!.accountCount).toBe(0);
+
+    const accId = await repo.addWatchlistAccount(id, { username: "@fda", priority: 90 });
+    await repo.addWatchlistAccount(id, { username: "genomicsco" });
+    const accts = await repo.listWatchlistAccounts(id);
+    expect(accts).toHaveLength(2);
+    expect(accts[0]!.username).toBe("fda"); // @ stripped, highest priority first
+
+    lists = await repo.listWatchlists();
+    expect(lists[0]!.accountCount).toBe(2);
+
+    // adding the same handle upserts (no duplicate)
+    await repo.addWatchlistAccount(id, { username: "fda", priority: 80 });
+    expect(await repo.listWatchlistAccounts(id)).toHaveLength(2);
+
+    await repo.removeWatchlistAccount(id, accId);
+    expect(await repo.listWatchlistAccounts(id)).toHaveLength(1);
+
+    await repo.deleteWatchlist(id);
+    expect(await repo.listWatchlists()).toHaveLength(0);
+  });
+
+  it("toggles enabled state", async () => {
+    const { repo } = repos();
+    const id = await repo.createWatchlist({ name: "AI Labs", slug: "ai-labs" });
+    await repo.setWatchlistEnabled(id, false);
+    expect((await repo.getWatchlist(id))!.enabled).toBe(false);
+  });
+});
+
+describe("manual alerts", () => {
+  it("creates a standalone alert with no post/monitor", async () => {
+    const { repo } = repos();
+    const id = await repo.createManualAlert({ severity: "high", title: "Watch item", reason: "Analyst flagged" });
+    expect(id).toBeTruthy();
+    const alerts = await repo.listAlerts("open");
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.postId).toBe(""); // null post_id maps to empty string
+    expect(alerts[0]!.severity).toBe("high");
+  });
+});
+
+describe("maintenance", () => {
+  it("reports stats and clears runs without touching monitors", async () => {
+    const { repo } = repos();
+    const { id } = await repo.upsertPost(post());
+    await repo.startRun("mon_genomics", "rk1", "success");
+    const before = await repo.maintenanceStats();
+    expect(before.posts).toBe(1);
+    expect(before.ingestion_runs).toBe(1);
+    expect(before.monitors).toBe(8);
+
+    const cleared = await repo.clearRuns();
+    expect(cleared).toBe(1);
+    const after = await repo.maintenanceStats();
+    expect(after.ingestion_runs).toBe(0);
+    expect(after.monitors).toBe(8); // config preserved
+    void id;
+  });
+
+  it("resetIntelligence wipes data but preserves monitors + settings", async () => {
+    const { repo } = repos();
+    await repo.upsertPost(post());
+    await repo.recordUsage({ provider: "x", operation: "recent_search", monitorId: "mon_genomics", resourceCount: 5 });
+    await repo.resetIntelligence({ resetCheckpoints: true });
+    const s = await repo.maintenanceStats();
+    expect(s.posts).toBe(0);
+    expect(s.api_usage).toBe(0);
+    expect(s.monitors).toBe(8);
+    expect(await repo.getSetting<string>("app.timezone")).toBe("Asia/Kolkata");
+  });
+
+  it("purgeOldPosts never deletes starred posts (spec §51)", async () => {
+    const { repo } = repos();
+    const oldA = await repo.upsertPost(post({ xPostId: "1800000000000000010", createdAt: "2020-01-01T00:00:00Z" }));
+    const oldStarred = await repo.upsertPost(post({ xPostId: "1800000000000000011", createdAt: "2020-01-01T00:00:00Z" }));
+    await repo.patchState(oldStarred.id, { isStarred: true });
+    const deleted = await repo.purgeOldPosts("2021-01-01T00:00:00Z");
+    expect(deleted).toBe(1); // only the non-starred old post
+    expect(await repo.getPost(oldA.id)).toBeNull();
+    expect(await repo.getPost(oldStarred.id)).not.toBeNull();
+  });
+});
+
 describe("feed query + cursor", () => {
   it("filters by strategic score and paginates by cursor", async () => {
     const { repo, d1 } = repos();

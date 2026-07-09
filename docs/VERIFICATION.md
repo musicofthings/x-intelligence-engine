@@ -15,20 +15,26 @@ and their real outcomes. No results are fabricated.
 |---|---|---|
 | `pnpm install` | ✅ success | 9 workspaces; esbuild build approved |
 | `pnpm typecheck` | ✅ success | all 9 workspaces `tsc --noEmit` clean |
-| `pnpm test` | ✅ success | 79 tests across 7 files, all passing |
-| `pnpm --filter @xie/web build` | ✅ success | `dist/` produced, ~274 kB (86 kB gzip) |
+| `pnpm test` | ✅ success | 101 tests across 8 files, all passing |
+| `pnpm --filter @xie/web build` | ✅ success | `dist/` produced, ~277 kB (87 kB gzip) |
 | `pnpm --filter @xie/api-worker build` | ✅ success | typecheck build |
 | `pnpm --filter @xie/pipeline-worker build` | ✅ success | typecheck build |
 
-### Test breakdown (79 total)
+### Test breakdown (101 total)
 
 - `@xie/shared` — 12 (ids as strings, URL builder, SSRF guard, error envelope)
 - `@xie/config` — 17 (env boot/capability gaps, prod auth refusal, budgets, bands, scheduling, pricing)
 - `@xie/x-client` — 15 (normalization, string ids, rate-limit parse/backoff, webhook HMAC verify, client guards)
 - `@xie/screening` — 16 (deterministic prefilter, schema validation, alert eval, injection separation, mocked Anthropic)
-- `@xie/db` — 10 (migrations+seed apply, upsert/match/screening/alert/run/webhook idempotency, usage aggregation, feed cursor)
+- `@xie/db` — 16 (migrations+seed, idempotency, usage aggregation, feed cursor, watchlist CRUD, manual alerts, maintenance incl. starred-purge protection)
 - `@xie/mcp` — 7 (read-only default, input validation, unknown tool, untrusted labelling, no secrets)
+- `@xie/api-worker` — 8 (Cloudflare Access JWT: RS256 signature, forged-token/expiry/aud/allow-list/issuer/kid rejection)
 - `@xie/pipeline-worker` — 2 (full acceptance flow §66 with mocked X + Claude; screening idempotency under duplicate delivery)
+
+### Production deployment (performed by operator)
+
+- Deployed to Cloudflare: api-worker (serves API + MCP + SPA via Static Assets) on `app.seyarkainunnarivu.com` behind Cloudflare Access (One-time PIN), pipeline-worker (cron + queue consumers), D1 + queues provisioned, migrations applied.
+- Live X collection → prefilter → Claude screening → feed confirmed working end to end.
 
 ## Not verified here (needs external credentials / Cloudflare)
 

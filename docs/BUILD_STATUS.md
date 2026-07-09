@@ -25,20 +25,28 @@ See `docs/VERIFICATION.md` for the command log. Summary:
 
 - `pnpm install` — see verification doc.
 - `pnpm typecheck` — see verification doc.
-- `pnpm test` — see verification doc (prefilter, normalization, scheduling, budget, schema, URL, MCP-input tests).
+- `pnpm test` — 101 tests across 8 files (see verification doc).
 
-## In progress / partial
+## Deployed to production
 
-- API route integration tests against Miniflare (structure present; not exhaustive).
-- Frontend component tests and full page polish.
-- Alert-evaluation and digest-generation edge cases.
+- Single-origin architecture: the api-worker serves the API, `/mcp`, and the built SPA
+  (Workers Static Assets) on `app.seyarkainunnarivu.com`, behind Cloudflare Access with
+  a cryptographically-verified Access JWT (RS256 sig + aud + expiry + email allow-list).
+- pipeline-worker deployed (cron dispatcher + queue consumers); D1 + queues provisioned;
+  migrations applied. Live X → prefilter → Claude → feed confirmed working.
 
-## Blocked (external credentials required)
+## Added post-v1 (this session)
 
-- Live X collection, live Claude screening, Cloudflare deploy + D1 migrate. All are
-  code-complete and documented; none are executed or claimed as executed.
+- Cloudflare Access JWT verification in the worker (defense-in-depth).
+- Admin: Log out, Clear cache, and audited DB maintenance (reset runs/alerts/usage/digests,
+  purge old posts with starred-protection, full data reset preserving config).
+- Watchlists: full CRUD + account add/remove (migration none needed).
+- Manual alerts: analyst-created standalone alerts (migration `0004_manual_alerts`).
+- Pipeline hardening: unbound-fetch fix, upstream-status logging, auto-pause on permanent
+  X errors (401/402/403).
 
-## Next step
+## Remaining (non-blocking)
 
-Run the verification commands in `docs/VERIFICATION.md`; provision Cloudflare per
-`docs/CLOUDFLARE_SETUP.md`; add credentials to Worker secrets.
+- API route integration tests against Miniflare (unit + acceptance coverage present).
+- Frontend component tests; watchlist-driven collection wiring (accounts → user-timeline monitors).
+- Confirm `ANTHROPIC_MODEL` id is current in the deployed secret.
