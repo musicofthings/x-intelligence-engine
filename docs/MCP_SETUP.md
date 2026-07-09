@@ -59,3 +59,26 @@ Old tokens stop working immediately after rotation. Update every connected clien
 
 Set `MCP_ALLOW_MUTATIONS=true` in `apps/api-worker/wrangler.jsonc` vars and redeploy.
 Leave it `false` unless you explicitly want MCP clients to trigger paid live runs.
+
+## Complementary: x.com's own MCP servers (client-side)
+
+X provides its own MCP servers you can connect to Claude Code alongside this one. They are
+separate from XIE — they query X directly, not the local intelligence DB.
+
+- **X docs MCP** — remote, free, no X API credits. Great for looking up X API details.
+  ```bash
+  claude mcp add --transport http x-docs https://docs.x.com/mcp
+  ```
+- **XMCP (X API server)** — runs locally, wraps the live X API (OAuth 1.0a browser
+  consent), and **consumes your X API credits** on every call. Start X's XMCP server
+  (default `http://127.0.0.1:8000/mcp`), register its OAuth callback in the X Developer
+  Console, then:
+  ```bash
+  claude mcp add --transport http xmcp http://127.0.0.1:8000/mcp
+  ```
+
+Guidance: use **x-docs** freely; use **xmcp** only for deliberate live actions — it bills
+against the same credit balance that feeds this app's collection. XIE's own `/mcp` remains
+the zero-marginal-cost way to query already-screened intelligence.
+
+Reference: https://docs.x.com/tools/mcp

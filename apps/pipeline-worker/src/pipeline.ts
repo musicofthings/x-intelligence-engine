@@ -66,8 +66,78 @@ export async function dispatchDueMonitors(ctx: Ctx, nowMs: number): Promise<numb
   return due.length;
 }
 
-/** Handle one ingest message: either a webhook payload or a collect trigger. */
+/** Watchlist dispatcher (spec §6.5, §7.2): enqueue timeline reads for due accounts. */
+export async function dispatchWatchlists(ctx: Ctx, nowMs: number): Promise<number> {
+  const interval = (await ctx.repo.getSetting<number>("watchlist.poll_interval_minutes")) ?? 180;
+  const due = await ctx.repo.dueWatchlistAccounts(nowMs, interval);
+  for (const acc of due) {
+    await ctx.bindings.INGEST_QUEUE.send({
+      schema_version: 1, event_id: crypto.randomUUID(), source_type: "user_timeline",
+      monitor_id: "", received_at: new Date(nowMs).toISOString(),
+      payload: {
+        account_id: acc.id, watchlist_id: acc.watchlistId, username: acc.username,
+        x_user_id: acc.xUserId, since_id: acc.sinceId, priority: acc.priority,
+      },
+    } satisfies IngestMessage);
+  }
+  ctx.logger.info("dispatch.watchlists", { event: "dispatch.watchlists", status: due.length });
+  return due.length;
+}
+
+/** Collect one watchlist account's timeline. Resolves + caches the X user id on first use. */
+async function handleWatchlistCollect(ctx: Ctx, msg: IngestMessage, nowMs: number): Promise<void> {
+  if (!capabilities(ctx.env).xApiConfigured) {
+    ctx.logger.warn("collect.x_not_configured", { event: "collect.x_not_configured" });
+    return;
+  }
+  const p = msg.payload as {
+    account_id: string; username: string; x_user_id: string | null; since_id: string | null; priority: number;
+  };
+  const maxResults = (await ctx.repo.getSetting<number>("watchlist.max_results_per_account")) ?? 10;
+  const nowIso = new Date(nowMs).toISOString();
+
+  const decision = checkXBudget(await budgetState(ctx.repo, nowMs), limits(ctx.env), maxResults + 1);
+  if (!decision.allowed) {
+    ctx.logger.warn("collect.budget_exceeded", { event: "collect.budget_exceeded", detail: decision.kind });
+    return;
+  }
+
+  const client = new XClient({ bearerToken: ctx.env.X_BEARER_TOKEN, baseUrl: ctx.env.X_API_BASE_URL }, globalFetch);
+  const pricing = pricingFromEnv(ctx.env);
+  try {
+    let xUserId = p.x_user_id;
+    if (!xUserId) {
+      const u = await client.getUserByUsername(p.username.replace(/^@/, ""));
+      xUserId = u.data.data?.id ?? null;
+      await ctx.repo.recordUsage({ provider: "x", operation: "user_lookup", monitorId: null, resourceCount: 0, requestCount: 1, estimatedCostUsd: estimateXCost(pricing, 0, 1) });
+      if (!xUserId) {
+        ctx.logger.warn("watchlist.unresolved", { event: "watchlist.unresolved", detail: p.username });
+        await ctx.repo.checkpointWatchlistAccount(p.account_id, null, nowIso);
+        return;
+      }
+      await ctx.repo.resolveWatchlistAccountId(p.account_id, xUserId);
+    }
+
+    const r = await client.userTimeline(xUserId, {
+      maxResults, sinceId: p.since_id ?? undefined, excludeReplies: true, excludeRetweets: true,
+    });
+    const posts = normalizeSearchResponse(r.data);
+    await ctx.repo.recordUsage({ provider: "x", operation: "user_timeline", monitorId: null, resourceCount: posts.length, requestCount: 1, estimatedCostUsd: estimateXCost(pricing, posts.length) });
+    await processPosts(ctx, posts, "", 40, p.priority, nowMs);
+    await ctx.repo.checkpointWatchlistAccount(p.account_id, posts[0]?.xPostId ?? null, nowIso);
+  } catch (e) {
+    const status = (e as { detail?: { status?: number } }).detail?.status;
+    ctx.logger.error("watchlist.collect_failed", { event: "watchlist.collect_failed", status, detail: e instanceof Error ? e.message : "err" });
+    await ctx.repo.checkpointWatchlistAccount(p.account_id, null, nowIso); // mark polled to respect the interval
+    if (status === 401 || status === 402 || status === 403) return; // permanent — ack
+    throw e; // transient — retry
+  }
+}
+
+/** Handle one ingest message: webhook payload, monitor collect, or watchlist timeline. */
 export async function handleIngest(ctx: Ctx, msg: IngestMessage, nowMs: number): Promise<void> {
+  if (msg.source_type === "user_timeline") return handleWatchlistCollect(ctx, msg, nowMs);
+
   const caps = capabilities(ctx.env);
   let posts: NormalizedXPost[] = [];
   let monitorId = msg.monitor_id;

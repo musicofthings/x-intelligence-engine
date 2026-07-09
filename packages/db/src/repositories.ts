@@ -393,6 +393,41 @@ export class Repositories {
       .bind(accountId, watchlistId).run();
   }
 
+  // ── Watchlist-driven collection (spec §7.2) ─────────────────────────────────
+  /** Enabled accounts in enabled watchlists that are due for a timeline poll. */
+  async dueWatchlistAccounts(nowMs: number, intervalMinutes: number): Promise<
+    { id: string; watchlistId: string; username: string; xUserId: string | null; priority: number; sinceId: string | null }[]
+  > {
+    const cutoff = new Date(nowMs - Math.max(1, intervalMinutes) * 60_000).toISOString();
+    const { results } = await this.db
+      .prepare(
+        `SELECT a.id, a.watchlist_id, a.username, a.x_user_id, a.priority, a.since_id
+         FROM watchlist_accounts a JOIN watchlists w ON w.id = a.watchlist_id
+         WHERE a.enabled = 1 AND w.enabled = 1
+           AND (a.last_polled_at IS NULL OR a.last_polled_at < ?)
+         ORDER BY a.priority DESC`,
+      )
+      .bind(cutoff)
+      .all<{ id: string; watchlist_id: string; username: string; x_user_id: string | null; priority: number; since_id: string | null }>();
+    return results.map((r) => ({
+      id: String(r.id), watchlistId: String(r.watchlist_id), username: String(r.username),
+      xUserId: r.x_user_id ? String(r.x_user_id) : null, priority: Number(r.priority ?? 50),
+      sinceId: r.since_id ? String(r.since_id) : null,
+    }));
+  }
+
+  async resolveWatchlistAccountId(accountId: string, xUserId: string): Promise<void> {
+    await this.db.prepare("UPDATE watchlist_accounts SET x_user_id=?, resolved_at=?, updated_at=? WHERE id=?")
+      .bind(xUserId, this.clock.nowIso(), this.clock.nowIso(), accountId).run();
+  }
+
+  async checkpointWatchlistAccount(accountId: string, sinceId: string | null, polledAtIso: string): Promise<void> {
+    await this.db
+      .prepare("UPDATE watchlist_accounts SET since_id=COALESCE(?, since_id), last_polled_at=?, updated_at=? WHERE id=?")
+      .bind(sinceId, polledAtIso, this.clock.nowIso(), accountId)
+      .run();
+  }
+
   // ── Ingestion runs (idempotent per run_key) ────────────────────────────────
   async startRun(monitorId: string, runKey: string, status: IngestionRunStatus): Promise<string> {
     const id = this.ids.next("run");

@@ -158,6 +158,32 @@ describe("watchlists", () => {
     await repo.setWatchlistEnabled(id, false);
     expect((await repo.getWatchlist(id))!.enabled).toBe(false);
   });
+
+  it("schedules due accounts, respects interval + enabled, resolves + checkpoints", async () => {
+    const { repo } = repos();
+    const wl = await repo.createWatchlist({ name: "Genomics", slug: "genomics-cos" });
+    const accId = await repo.addWatchlistAccount(wl, { username: "nanopore", priority: 80 });
+    const now = Date.parse("2026-07-07T12:00:00Z");
+
+    let due = await repo.dueWatchlistAccounts(now, 180);
+    expect(due).toHaveLength(1);
+    expect(due[0]!.xUserId).toBeNull();
+
+    await repo.resolveWatchlistAccountId(accId, "55555");
+    await repo.checkpointWatchlistAccount(accId, "1800000000000000099", "2026-07-07T12:00:00Z");
+
+    // just polled -> not due within interval
+    expect(await repo.dueWatchlistAccounts(now + 60 * 60_000, 180)).toHaveLength(0);
+    // after interval -> due again, now with resolved id + since_id
+    due = await repo.dueWatchlistAccounts(now + 200 * 60_000, 180);
+    expect(due).toHaveLength(1);
+    expect(due[0]!.xUserId).toBe("55555");
+    expect(due[0]!.sinceId).toBe("1800000000000000099");
+
+    // disabled watchlist -> excluded
+    await repo.setWatchlistEnabled(wl, false);
+    expect(await repo.dueWatchlistAccounts(now + 200 * 60_000, 180)).toHaveLength(0);
+  });
 });
 
 describe("manual alerts", () => {

@@ -27,18 +27,82 @@ export function Usage() {
   );
 }
 
-/** Settings (spec §6.11) — capability flags only, never secret values. */
+function Toggle({ on, label, hint, onToggle, danger }: { on: boolean; label: string; hint?: string; onToggle: () => void; danger?: boolean }) {
+  return (
+    <div className="flex items-center justify-between border-b border-line py-2">
+      <div>
+        <div className="text-sm text-fg">{label}</div>
+        {hint && <div className="text-xs text-fg-subtle">{hint}</div>}
+      </div>
+      <button
+        role="switch"
+        aria-checked={on}
+        onClick={onToggle}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? (danger ? "bg-amber-500" : "bg-teal-500") : "bg-elevated"}`}
+      >
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
+      </button>
+    </div>
+  );
+}
+
+/** Settings (spec §6.11, §30) — capability flags + automation switches. No secret values. */
 export function Settings() {
+  const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["settings"],
     queryFn: () => api.get<Envelope<{ settings: Record<string, unknown>; capabilities: Record<string, unknown> }>>("/settings"),
   });
+  const save = useMutation({
+    mutationFn: (patch: Record<string, unknown>) => api.patch("/settings", patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+
   if (isLoading) return <Loading />;
   if (error) return <ErrorState message={(error as Error).message} />;
   const { settings, capabilities } = data!.data;
+  const flag = (k: string, d = false) => (settings[k] === undefined ? d : Boolean(settings[k]));
+  const interval = Number(settings["watchlist.poll_interval_minutes"] ?? 180);
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold text-fg">Settings</h1>
+
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold text-fg">Automation</h2>
+        <p className="mb-2 text-xs text-fg-subtle">Master switches for scheduled jobs. Automatic collection is OFF by default — nothing runs unsupervised. "Run now" on a monitor always works regardless.</p>
+        <Toggle
+          on={flag("cron.collection_enabled")}
+          label="Automatic collection (every 15 min)"
+          hint="Cron-driven monitor + watchlist reads. This is the cost driver — leave off unless supervising."
+          danger
+          onToggle={() => save.mutate({ "cron.collection_enabled": !flag("cron.collection_enabled") })}
+        />
+        <Toggle
+          on={flag("cron.digest_enabled", true)}
+          label="Daily digest (08:00 IST)"
+          hint="Assembles stored intelligence into a digest. No X/Claude cost."
+          onToggle={() => save.mutate({ "cron.digest_enabled": !flag("cron.digest_enabled", true) })}
+        />
+        <Toggle
+          on={flag("cron.maintenance_enabled", true)}
+          label="Daily maintenance"
+          hint="Expires stuck runs, applies retention. No external cost."
+          onToggle={() => save.mutate({ "cron.maintenance_enabled": !flag("cron.maintenance_enabled", true) })}
+        />
+        <div className="flex items-center justify-between py-2">
+          <div>
+            <div className="text-sm text-fg">Watchlist poll interval (minutes)</div>
+            <div className="text-xs text-fg-subtle">How often each watchlist account's timeline is read.</div>
+          </div>
+          <input
+            type="number" min={15} max={1440} defaultValue={interval}
+            onBlur={(e) => { const v = Number(e.target.value); if (v && v !== interval) save.mutate({ "watchlist.poll_interval_minutes": v }); }}
+            className="w-24 rounded border border-line bg-bg px-2 py-1 text-sm text-fg"
+          />
+        </div>
+      </Card>
+
       <Card>
         <h2 className="mb-2 text-sm font-semibold text-fg">Capabilities</h2>
         <ul className="space-y-1 text-sm">
@@ -51,6 +115,7 @@ export function Settings() {
         </ul>
         <p className="mt-2 text-xs text-fg-subtle">Secret values (X bearer, Anthropic key, MCP token) are never sent to the browser.</p>
       </Card>
+
       <Card>
         <h2 className="mb-2 text-sm font-semibold text-fg">Configuration</h2>
         <pre className="text-xs text-fg-muted">{JSON.stringify(settings, null, 2)}</pre>
