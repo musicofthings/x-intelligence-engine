@@ -8,6 +8,8 @@ export interface Bindings {
   INGEST_QUEUE: Queue;
   SCREENING_QUEUE: Queue;
   RAW_ARCHIVE?: R2Bucket;
+  /** Static-assets binding — serves the built SPA (apps/web/dist) for non-API paths. */
+  ASSETS: Fetcher;
 
   // Vars + secrets (strings from the platform).
   APP_ENV: string;

@@ -8,16 +8,29 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "vars": {
-    "APP_ENV": "development",
-    "APP_VERSION": "local",
-    "WEB_ORIGIN": "https://xie-web.pages.dev",
+    "APP_ENV": "production",
+    "APP_VERSION": "1.0.0",
+    "WEB_ORIGIN": "https://app.seyarkainunnarivu.com",
     "APP_TIMEZONE": "Asia/Kolkata",
-    "AUTH_MODE": "development",
+    "AUTH_MODE": "cloudflare_access",
     "X_API_BASE_URL": "https://api.x.com",
     "MCP_ALLOW_MUTATIONS": "false",
     "ENABLE_RAW_ARCHIVE": "false",
     "ENABLE_VECTOR_SEARCH": "false",
     "LOG_LEVEL": "info"
+  },
+  // Wildcard route (not custom_domain): it ATTACHES to the existing DNS record — no DNS
+  // creation, no collision with the record Pages left behind — and takes precedence over
+  // Pages. The worker owns the whole hostname, serving both the API and the built SPA
+  // (via the ASSETS binding below). The open workers.dev URL stays off.
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "app.seyarkainunnarivu.com/*", "zone_name": "seyarkainunnarivu.com" }
+  ],
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "xie-db", "database_id": "548976f8-2290-413e-bf2a-003e1f881263", "migrations_dir": "../../packages/db/migrations" }

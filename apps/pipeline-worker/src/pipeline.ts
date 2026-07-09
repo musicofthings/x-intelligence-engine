@@ -15,6 +15,11 @@ const PRIORITY_KEYWORDS = [
 ];
 const STRATEGIC_PHRASES = ["practice-changing", "practice changing", "first-in-class", "breakthrough therapy"];
 
+// The runtime's global fetch must run with `this` === global. Passing the bare `fetch`
+// reference around can rebind `this` and trigger "Illegal invocation". This wrapper
+// always calls it unbound, so it's safe to hand to XClient / screenPost.
+const globalFetch: typeof fetch = (input, init) => fetch(input, init);
+
 export interface Ctx {
   env: Env;
   repo: Repositories;
@@ -89,7 +94,7 @@ export async function handleIngest(ctx: Ctx, msg: IngestMessage, nowMs: number):
       return;
     }
 
-    const client = new XClient({ bearerToken: ctx.env.X_BEARER_TOKEN, baseUrl: ctx.env.X_API_BASE_URL }, fetch);
+    const client = new XClient({ bearerToken: ctx.env.X_BEARER_TOKEN, baseUrl: ctx.env.X_API_BASE_URL }, globalFetch);
     try {
       let received = 0;
       if (monitor.type === "recent_search" && monitor.xQuery) {
@@ -114,10 +119,27 @@ export async function handleIngest(ctx: Ctx, msg: IngestMessage, nowMs: number):
       await ctx.repo.setMonitorRunResult(monitor.id, { lastRunAt: new Date(nowMs).toISOString(), lastSuccessAt: new Date(nowMs).toISOString(), lastError: null, sinceId: newestId });
       return;
     } catch (e) {
-      const message = e instanceof Error ? e.message : "collection failed";
+      // Surface the real upstream status + body so failures are diagnosable in the
+      // tail and on the Monitors page (the X error body is not secret).
+      const err = e as { code?: string; detail?: { status?: number; body?: string } };
+      const status = err.detail?.status;
+      const body = typeof err.detail?.body === "string" ? err.detail.body.slice(0, 300) : "";
+      const message = status ? `X ${status}: ${body}` : e instanceof Error ? e.message : "collection failed";
+      ctx.logger.error("collect.failed", {
+        event: "collect.failed", monitor_id: monitor.id, error_code: err.code, status, detail: body,
+      });
       await ctx.repo.finishRun(runKey, { status: "failed", error: message });
       await ctx.repo.setMonitorRunResult(monitor.id, { lastRunAt: new Date(nowMs).toISOString(), lastError: message });
-      throw e; // let the queue retry per policy
+
+      // Permanent upstream errors (auth / billing / forbidden) won't resolve on retry.
+      // Auto-pause the monitor so the cron stops re-hammering X, and ACK the message
+      // (return, don't rethrow). Transient errors (429/5xx) still retry via the queue.
+      if (status === 401 || status === 402 || status === 403) {
+        await ctx.repo.setMonitorEnabled(monitor.id, false);
+        ctx.logger.warn("collect.monitor_paused", { event: "collect.monitor_paused", monitor_id: monitor.id, status });
+        return;
+      }
+      throw e; // transient — let the queue retry per policy
     }
   }
 
@@ -183,7 +205,7 @@ export async function handleScreening(ctx: Ctx, msg: ScreeningMessage, nowMs: nu
       monitor: { monitorName: monitor?.name ?? "General", monitorDescription: monitor?.description ?? null },
       post: { text: post.text, authorUsername: post.authorUsername, createdAt: post.createdAt, lang: post.lang },
     },
-    fetch,
+    globalFetch,
   );
 
   const pricing = pricingFromEnv(ctx.env);

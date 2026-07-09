@@ -54,4 +54,9 @@ app.route("/mcp", mcpRoutes());
 app.use("/api/*", authMiddleware);
 app.route("/api", apiRoutes());
 
+// SPA fallback: any non-API/non-MCP path serves the built React app. Static files
+// (js/css) are served by the assets layer before the worker runs; this handles direct
+// navigations to client-side routes (e.g. /posts, /monitors) by returning index.html.
+app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+
 export default app satisfies { fetch: (req: Request, env: Bindings, ctx: ExecutionContext) => Response | Promise<Response> };

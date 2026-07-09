@@ -1,2 +1,0 @@
-# Cloudflare Pages SPA fallback (spec §38). API + MCP are served by the api-worker.
-/*    /index.html   200

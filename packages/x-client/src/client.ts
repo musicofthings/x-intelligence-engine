@@ -59,7 +59,10 @@ export class XClient {
     for (const [k, v] of Object.entries(query)) {
       if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
     }
-    const res = await this.fetchImpl(url.toString(), {
+    // Call via a detached local so `this` is not the client instance — the runtime's
+    // global fetch throws "Illegal invocation" if invoked as a method (this !== global).
+    const doFetch = this.fetchImpl;
+    const res = await doFetch(url.toString(), {
       headers: { authorization: `Bearer ${this.token}`, "content-type": "application/json" },
     });
     const rateLimit = parseRateLimit(res.headers);
