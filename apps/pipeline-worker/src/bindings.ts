@@ -8,6 +8,8 @@ export interface Bindings {
   APP_ENV: string;
   APP_VERSION: string;
   APP_TIMEZONE: string;
+  /** Not used for authentication here — see the note in wrangler.jsonc. */
+  AUTH_MODE?: string;
   X_BEARER_TOKEN?: string;
   X_API_BASE_URL?: string;
   X_POST_READ_UNIT_COST_USD?: string;

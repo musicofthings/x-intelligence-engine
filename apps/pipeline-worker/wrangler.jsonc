@@ -6,10 +6,19 @@
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // This worker has no HTTP surface (scheduled + queue handlers only), so the open
+  // workers.dev hostname would be an unauthenticated internet-facing endpoint on a
+  // worker that holds the D1 binding. Nothing should reach it.
+  "workers_dev": false,
   "vars": {
-    "APP_ENV": "development",
-    "APP_VERSION": "local",
+    "APP_ENV": "production",
+    "APP_VERSION": "1.0.0",
     "APP_TIMEZONE": "Asia/Kolkata",
+    // No auth is enforced here — there are no requests to authenticate. It is declared
+    // only because `loadEnv` refuses AUTH_MODE=development when APP_ENV=production, and
+    // an unset AUTH_MODE defaults to "development", which would throw on every cron and
+    // queue invocation.
+    "AUTH_MODE": "cloudflare_access",
     "X_API_BASE_URL": "https://api.x.com",
     "HARD_STOP_ON_BUDGET_EXCEEDED": "true",
     "ENABLE_RAW_ARCHIVE": "false",
