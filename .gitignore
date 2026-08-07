@@ -17,3 +17,10 @@ apps/web/dist/
 
 # Contains a live MCP token pasted during setup — keep out of git.
 docs/CLOUDFLARE_SETUP.md
+
+# context-engineering-kit local state: hook-fire markers, usage telemetry, session
+# history. Machine-specific and regenerated every session. Note this ignores only
+# .claude/session/, so project-level .claude config stays trackable.
+.claude/session/
+# Auto-fetched API reference cache, refreshed daily by the session-start hook.
+api_docs.md
