@@ -1,5 +1,19 @@
 /** X rate-limit header parsing + backoff (spec §7.6). Pure + unit-tested. */
 
+/**
+ * True when X rejected the request because the stored `since_id` checkpoint has aged
+ * out of the recent-search window (X only serves the last 7 days).
+ *
+ * This arrives as a 400, which is otherwise a permanent client error — but this
+ * particular one is self-healing: clear the checkpoint and the next run succeeds.
+ * Distinguishing it matters because retrying with the same `since_id` can never work,
+ * so treating it as transient means failing every run forever.
+ */
+export function isStaleSinceIdError(status: number | undefined, body: string | undefined): boolean {
+  if (status !== 400 || !body) return false;
+  return /since_id/i.test(body) && /must be a tweet id created after|larger than/i.test(body);
+}
+
 export interface RateLimitInfo {
   limit: number | null;
   remaining: number | null;

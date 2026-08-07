@@ -105,6 +105,28 @@ export class Repositories {
     return id;
   }
 
+  /**
+   * Clear a monitor's collection checkpoint so the next run starts fresh.
+   *
+   * `setMonitorRunResult` deliberately uses COALESCE(?, since_id) so a run that returns
+   * nothing cannot wipe a good checkpoint — which also means it can never clear a BAD
+   * one. This is the escape hatch for a `since_id` that has aged out of X's window.
+   */
+  async clearMonitorCheckpoint(id: string): Promise<void> {
+    await this.db
+      .prepare("UPDATE monitors SET since_id=NULL, pagination_state_json=NULL, updated_at=? WHERE id=?")
+      .bind(this.clock.nowIso(), id)
+      .run();
+  }
+
+  /** Same escape hatch for a watchlist account's timeline checkpoint. */
+  async clearWatchlistAccountCheckpoint(accountId: string): Promise<void> {
+    await this.db
+      .prepare("UPDATE watchlist_accounts SET since_id=NULL, updated_at=? WHERE id=?")
+      .bind(this.clock.nowIso(), accountId)
+      .run();
+  }
+
   async setMonitorEnabled(id: string, enabled: boolean): Promise<void> {
     await this.db.prepare("UPDATE monitors SET enabled = ?, updated_at = ? WHERE id = ?")
       .bind(enabled ? 1 : 0, this.clock.nowIso(), id).run();

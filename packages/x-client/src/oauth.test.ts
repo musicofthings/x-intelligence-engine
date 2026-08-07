@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { beginAuthorization, exchangeCode, refreshAccessToken, isExpired, DEFAULT_SCOPES } from "./oauth.js";
 import { XWriteClient, X_MAX_REPLY_CHARS } from "./write.js";
+import { isStaleSinceIdError } from "./ratelimit.js";
 
 const CFG = {
   clientId: "cid",
@@ -132,6 +133,37 @@ describe("isExpired", () => {
   it("treats a missing expiry as usable and a malformed one as expired", () => {
     expect(isExpired(null, NOW)).toBe(false);
     expect(isExpired("not-a-date", NOW)).toBe(true);
+  });
+});
+
+describe("isStaleSinceIdError", () => {
+  // Verbatim body X returned in production on 2026-08-07 once collection was enabled
+  // with checkpoints older than the 7-day recent-search window.
+  const REAL_BODY = JSON.stringify({
+    detail: "One or more parameters to your request was invalid.",
+    errors: [{
+      message: "'since_id' must be a tweet id created after 2026-07-31T11:45Z. Please use a 'since_id' that is larger than 2083157183716917248",
+      parameters: { since_id: ["2075200933194039668"] },
+    }],
+    title: "Invalid Request",
+  });
+
+  it("recognizes the aged-out checkpoint response", () => {
+    expect(isStaleSinceIdError(400, REAL_BODY)).toBe(true);
+  });
+
+  it("ignores other 400s so a bad query still pauses the monitor", () => {
+    expect(isStaleSinceIdError(400, '{"errors":[{"message":"Invalid query"}]}')).toBe(false);
+    expect(isStaleSinceIdError(400, "")).toBe(false);
+    expect(isStaleSinceIdError(400, undefined)).toBe(false);
+  });
+
+  it("ignores non-400 statuses", () => {
+    // A 429 must stay retryable; misreading it as a checkpoint problem would silently
+    // wipe a perfectly good since_id and re-collect everything.
+    expect(isStaleSinceIdError(429, REAL_BODY)).toBe(false);
+    expect(isStaleSinceIdError(500, REAL_BODY)).toBe(false);
+    expect(isStaleSinceIdError(undefined, REAL_BODY)).toBe(false);
   });
 });
 

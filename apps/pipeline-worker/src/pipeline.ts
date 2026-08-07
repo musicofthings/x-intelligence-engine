@@ -3,7 +3,7 @@ import {
   loadEnv, capabilities, pricingFromEnv, estimateXCost, estimateClaudeCost,
   checkXBudget, checkClaudeBudget, PROMPT_VERSIONS, type BudgetLimits, type BudgetState, type Env,
 } from "@xie/config";
-import { XClient, normalizeSearchResponse, isRepostDuplicate } from "@xie/x-client";
+import { XClient, normalizeSearchResponse, isRepostDuplicate, isStaleSinceIdError } from "@xie/x-client";
 import { RedditClient, buildRedditQuery, cleanSubreddit, normalizeRedditListing } from "@xie/reddit-client";
 import { prefilter, screenPost, evaluateAlert, type PrefilterContext } from "@xie/screening";
 import { createLogger, jobKey, type Logger, type NormalizedXPost } from "@xie/shared";
@@ -235,10 +235,17 @@ async function handleWatchlistCollect(ctx: Ctx, msg: IngestMessage, nowMs: numbe
     await processPosts(ctx, posts, "", 40, p.priority, nowMs);
     await ctx.repo.checkpointWatchlistAccount(p.account_id, posts[0]?.xPostId ?? null, nowIso);
   } catch (e) {
-    const status = (e as { detail?: { status?: number } }).detail?.status;
+    const detail = (e as { detail?: { status?: number; body?: string } }).detail;
+    const status = detail?.status;
     ctx.logger.error("watchlist.collect_failed", { event: "watchlist.collect_failed", status, detail: e instanceof Error ? e.message : "err" });
     await ctx.repo.checkpointWatchlistAccount(p.account_id, null, nowIso); // mark polled to respect the interval
-    if (status === 401 || status === 402 || status === 403) return; // permanent — ack
+    // Same aged-out-checkpoint case as monitors: clear it so the next poll recovers.
+    if (isStaleSinceIdError(status, detail?.body)) {
+      await ctx.repo.clearWatchlistAccountCheckpoint(p.account_id);
+      ctx.logger.warn("watchlist.checkpoint_reset", { event: "watchlist.checkpoint_reset", status });
+      return;
+    }
+    if (status === 400 || status === 401 || status === 402 || status === 403) return; // permanent — ack
     throw e; // transient — retry
   }
 }
@@ -311,10 +318,21 @@ export async function handleIngest(ctx: Ctx, msg: IngestMessage, nowMs: number):
       await ctx.repo.finishRun(runKey, { status: "failed", error: message });
       await ctx.repo.setMonitorRunResult(monitor.id, { lastRunAt: new Date(nowMs).toISOString(), lastError: message });
 
-      // Permanent upstream errors (auth / billing / forbidden) won't resolve on retry.
-      // Auto-pause the monitor so the cron stops re-hammering X, and ACK the message
-      // (return, don't rethrow). Transient errors (429/5xx) still retry via the queue.
-      if (status === 401 || status === 402 || status === 403) {
+      // A `since_id` that has aged out of X's 7-day window: self-healing, so clear the
+      // checkpoint and ACK. Retrying with the same since_id can NEVER succeed, so
+      // treating it as transient would fail every run forever.
+      if (isStaleSinceIdError(status, body)) {
+        await ctx.repo.clearMonitorCheckpoint(monitor.id);
+        ctx.logger.warn("collect.checkpoint_reset", {
+          event: "collect.checkpoint_reset", monitor_id: monitor.id, status,
+        });
+        return;
+      }
+
+      // Permanent upstream errors (auth / billing / forbidden / bad query) won't resolve
+      // on retry. Auto-pause the monitor so the cron stops re-hammering X, and ACK the
+      // message (return, don't rethrow). Transient errors (429/5xx) still retry.
+      if (status === 400 || status === 401 || status === 402 || status === 403) {
         await ctx.repo.setMonitorEnabled(monitor.id, false);
         ctx.logger.warn("collect.monitor_paused", { event: "collect.monitor_paused", monitor_id: monitor.id, status });
         return;
