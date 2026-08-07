@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Envelope } from "../lib/api";
 import { Card, Stat, Loading, ErrorState, EmptyState, Button } from "../components/ui";
 import { timeAgo } from "../lib/format";
+import type { EngageStats, XOAuthStatus } from "../lib/types";
 
 /** Usage & Cost (spec §6.10). */
 export function Usage() {
@@ -79,6 +80,13 @@ export function Settings() {
           onToggle={() => save.mutate({ "cron.collection_enabled": !flag("cron.collection_enabled") })}
         />
         <Toggle
+          on={flag("cron.reddit_enabled")}
+          label="Automatic Reddit collection (every 15 min)"
+          hint="Independent of X collection. Reddit's API is free; the cost is downstream Claude screening."
+          danger
+          onToggle={() => save.mutate({ "cron.reddit_enabled": !flag("cron.reddit_enabled") })}
+        />
+        <Toggle
           on={flag("cron.digest_enabled", true)}
           label="Daily digest (08:00 IST)"
           hint="Assembles stored intelligence into a digest. No X/Claude cost."
@@ -103,6 +111,8 @@ export function Settings() {
         </div>
       </Card>
 
+      <ConnectedAccounts />
+
       <Card>
         <h2 className="mb-2 text-sm font-semibold text-fg">Capabilities</h2>
         <ul className="space-y-1 text-sm">
@@ -121,6 +131,76 @@ export function Settings() {
         <pre className="text-xs text-fg-muted">{JSON.stringify(settings, null, 2)}</pre>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Connected accounts. Sending replies needs X user-context OAuth, which is a separate
+ * credential from the app-only bearer token used for reads. Token material is never
+ * sent to the browser — only the identity and expiry.
+ */
+function ConnectedAccounts() {
+  const qc = useQueryClient();
+  const [note, setNote] = useState<string | null>(() => {
+    const p = new URLSearchParams(window.location.search).get("x_oauth");
+    return p === "connected" ? "X account connected." : p === "denied" ? "Authorization was declined on X." : null;
+  });
+
+  const x = useQuery({
+    queryKey: ["oauth-x"],
+    queryFn: () => api.get<Envelope<XOAuthStatus>>("/oauth/x/status"),
+  });
+  const reddit = useQuery({
+    queryKey: ["reddit-status"],
+    queryFn: () => api.get<Envelope<{ configured: boolean; missing: string[] }>>("/reddit/status"),
+  });
+
+  const connect = useMutation({
+    mutationFn: () => api.post<Envelope<{ authorize_url: string }>>("/oauth/x/start", {}),
+    // Full-page navigation: X's consent screen refuses to render in an iframe.
+    onSuccess: (r) => { window.location.href = r.data.authorize_url; },
+    onError: (e) => setNote((e as Error).message),
+  });
+  const disconnect = useMutation({
+    mutationFn: () => api.del("/oauth/x"),
+    onSuccess: () => { setNote("X account disconnected."); qc.invalidateQueries({ queryKey: ["oauth-x"] }); },
+  });
+
+  const s = x.data?.data;
+  const r = reddit.data?.data;
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-sm font-semibold text-fg">Connected accounts</h2>
+      <p className="mb-3 text-xs text-fg-subtle">
+        Reading X uses the app-only bearer token. Sending replies needs a user-context OAuth connection.
+      </p>
+      {note && <div className="mb-3 rounded border border-line bg-elevated px-3 py-2 text-xs text-fg">{note}</div>}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-2">
+        <div>
+          <div className="text-sm text-fg">X (sending)</div>
+          <div className="text-xs text-fg-subtle">
+            {!s ? "Checking…"
+              : !s.configured ? `Not configured — missing ${s.missing.join(", ")}`
+                : s.connected ? `Connected as @${s.username ?? "unknown"}${s.scope ? ` · ${s.scope}` : ""}`
+                  : "Configured but no account connected."}
+          </div>
+        </div>
+        {s?.configured && (
+          s.connected
+            ? <Button variant="danger" onClick={() => disconnect.mutate()}>Disconnect</Button>
+            : <Button variant="primary" onClick={() => connect.mutate()} disabled={connect.isPending}>Connect X account</Button>
+        )}
+      </div>
+
+      <div className="py-2">
+        <div className="text-sm text-fg">Reddit (collection)</div>
+        <div className="text-xs text-fg-subtle">
+          {!r ? "Checking…" : r.configured ? "Configured." : `Not configured — missing ${r.missing.join(", ")}`}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -263,6 +343,77 @@ export function Sources() {
             ))}
           </tbody>
         </table>
+      </Card>
+    </div>
+  );
+}
+
+/** Engagement history: daily goal attainment and per-session stats. */
+export function Sessions() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["engage-stats"],
+    queryFn: () => api.get<Envelope<EngageStats>>("/engage/stats"),
+  });
+  if (isLoading) return <Loading />;
+  if (error) return <ErrorState message={(error as Error).message} />;
+  const s = data!.data;
+  const maxDay = Math.max(1, ...s.by_day.map((d) => d.replies));
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-xl font-semibold text-fg">Engagement</h1>
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Stat label="Replies today" value={s.replies_today} hint={s.goal_met ? "goal met" : `goal ${s.daily_goal}`} />
+        <Stat label="Daily goal" value={s.daily_goal} />
+        <Stat label="Decisions recorded" value={s.learning.observations} hint="engaged + skipped" />
+        <Stat label="Sessions logged" value={s.recent_sessions.length} />
+      </div>
+
+      <Card>
+        <h2 className="mb-2 text-sm font-semibold text-fg">Replies per day</h2>
+        {s.by_day.length === 0 ? (
+          <p className="text-sm text-fg-subtle">No replies sent yet.</p>
+        ) : (
+          <div className="flex items-end gap-1" style={{ height: 100 }}>
+            {s.by_day.map((d) => (
+              <div key={d.day} className="flex flex-1 flex-col items-center justify-end" title={`${d.day}: ${d.replies}`}>
+                <div className="w-full rounded-t bg-sky-600" style={{ height: `${(d.replies / maxDay) * 80}px` }} />
+                <span className="mt-1 text-[10px] text-fg-subtle">{d.day.slice(5)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="mb-2 text-sm font-semibold text-fg">Recent sessions</h2>
+        {s.recent_sessions.length === 0 ? (
+          <p className="text-sm text-fg-subtle">No sessions yet. Start one on the Engage page.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase text-fg-subtle">
+                <th className="py-1">Started</th><th>Goal</th><th>Reviewed</th>
+                <th>Replies</th><th>Skipped</th><th>Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.recent_sessions.map((x) => (
+                <tr key={x.id} className="border-t border-line">
+                  <td className="py-1 text-fg-muted">{timeAgo(x.startedAt)}</td>
+                  <td>{x.goal}</td>
+                  <td>{x.reviewed}</td>
+                  <td className={x.repliesSent >= x.goal && x.goal > 0 ? "text-teal-400" : ""}>{x.repliesSent}</td>
+                  <td className="text-fg-muted">{x.skipped}</td>
+                  <td className="text-fg-subtle">
+                    {x.endedAt ? `${Math.round(x.durationSeconds / 60)}m` : "in progress"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
     </div>
   );

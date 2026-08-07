@@ -16,6 +16,7 @@ import type {
 } from "@xie/shared";
 import { isMonitorDue } from "@xie/config";
 import { type D1Like, type Clock, type IdGen, systemClock, randomIdGen } from "./d1.js";
+import { EngagementRepo } from "./engagement.js";
 import {
   rowToMonitor,
   rowToPost,
@@ -34,11 +35,16 @@ import {
  * Idempotency (spec §2.4) is enforced with UNIQUE constraints + INSERT ... ON CONFLICT.
  */
 export class Repositories {
+  /** Engagement layer (campaigns, drafts, sends, sessions, OAuth). See engagement.ts. */
+  readonly engage: EngagementRepo;
+
   constructor(
     private readonly db: D1Like,
     private readonly clock: Clock = systemClock,
     private readonly ids: IdGen = randomIdGen(),
-  ) {}
+  ) {
+    this.engage = new EngagementRepo(db, clock, ids);
+  }
 
   // ── Monitors ──────────────────────────────────────────────────────────────
   async listMonitors(): Promise<Monitor[]> {
@@ -79,14 +85,17 @@ export class Repositories {
     const id = m.id ?? this.ids.next("mon");
     await this.db
       .prepare(
-        `INSERT INTO monitors (id,name,slug,description,type,enabled,priority,x_query,x_list_id,
+        `INSERT INTO monitors (id,name,slug,description,type,network,subreddits_json,keywords_json,
+          enabled,priority,x_query,x_list_id,
           poll_interval_minutes,max_results_per_run,max_pages_per_run,prefilter_threshold,
           ai_screening_threshold,alert_threshold,language,excluded_terms_json,required_terms_json,
           created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .bind(
-        id, m.name, m.slug, m.description ?? null, m.type, m.enabled ? 1 : 0, m.priority ?? 50,
+        id, m.name, m.slug, m.description ?? null, m.type, m.network ?? "x",
+        JSON.stringify(m.subreddits ?? []), JSON.stringify(m.keywords ?? []),
+        m.enabled ? 1 : 0, m.priority ?? 50,
         m.xQuery ?? null, m.xListId ?? null, m.pollIntervalMinutes ?? 60, m.maxResultsPerRun ?? 25,
         m.maxPagesPerRun ?? 1, m.prefilterThreshold ?? 40, m.aiScreeningThreshold ?? 40,
         m.alertThreshold ?? 90, m.language ?? null, JSON.stringify(m.excludedTerms ?? []),
@@ -132,13 +141,13 @@ export class Repositories {
     const id = this.ids.next("post");
     await this.db
       .prepare(
-        `INSERT INTO posts (id,x_post_id,author_id,author_username,author_name,text,lang,created_at,
+        `INSERT INTO posts (id,network,x_post_id,author_id,author_username,author_name,text,lang,created_at,
            conversation_id,in_reply_to_user_id,url,like_count,repost_count,reply_count,quote_count,
            bookmark_count,impression_count,raw_json,first_seen_at,last_seen_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .bind(
-        id, post.xPostId, post.authorId || null, post.authorUsername, post.authorName, post.text,
+        id, post.network ?? "x", post.xPostId, post.authorId || null, post.authorUsername, post.authorName, post.text,
         post.lang, post.createdAt || null, post.conversationId, post.inReplyToUserId, post.url,
         post.metrics.likeCount, post.metrics.repostCount, post.metrics.replyCount, post.metrics.quoteCount,
         post.metrics.bookmarkCount, post.metrics.impressionCount, JSON.stringify(post.raw ?? null), now, now, now,
@@ -604,6 +613,8 @@ export class Repositories {
     const tables = [
       "posts", "screening_results", "prefilter_results", "post_monitor_matches",
       "alerts", "digests", "ingestion_runs", "api_usage", "jobs", "webhook_events", "monitors",
+      "campaigns", "voice_profiles", "reply_drafts", "sent_replies",
+      "engagement_sessions", "engagement_events",
     ];
     const out: Record<string, number> = {};
     for (const t of tables) out[t] = await this.countOf(t);
@@ -633,8 +644,10 @@ export class Repositories {
 
   /**
    * Delete all collected intelligence but PRESERVE configuration (monitors, watchlists,
-   * settings). Deleting posts cascades matches/prefilter/screening/states/alerts/digest_items.
-   * Optionally reset monitor checkpoints so they re-collect from scratch.
+   * campaigns, voice profiles, connected accounts, settings). Deleting posts cascades
+   * matches/prefilter/screening/states/alerts/digest_items, and also reply drafts,
+   * sent-reply records and engagement events. Optionally reset monitor checkpoints so
+   * they re-collect from scratch.
    */
   async resetIntelligence(opts: { resetCheckpoints?: boolean } = {}): Promise<Record<string, number>> {
     const before = await this.maintenanceStats();
@@ -644,6 +657,7 @@ export class Repositories {
     await this.db.prepare("DELETE FROM api_usage").run();
     await this.db.prepare("DELETE FROM jobs").run();
     await this.db.prepare("DELETE FROM webhook_events").run();
+    await this.db.prepare("DELETE FROM engagement_sessions").run();
     if (opts.resetCheckpoints) {
       await this.db
         .prepare(

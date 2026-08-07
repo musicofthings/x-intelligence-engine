@@ -6,6 +6,7 @@ export type ErrorCode =
   | "AUTHORIZATION_ERROR"
   | "RATE_LIMIT_ERROR"
   | "X_API_ERROR"
+  | "REDDIT_API_ERROR"
   | "CLAUDE_API_ERROR"
   | "DATABASE_ERROR"
   | "QUEUE_ERROR"
@@ -20,6 +21,7 @@ const PUBLIC_STATUS: Record<ErrorCode, number> = {
   AUTHORIZATION_ERROR: 403,
   RATE_LIMIT_ERROR: 429,
   X_API_ERROR: 502,
+  REDDIT_API_ERROR: 502,
   CLAUDE_API_ERROR: 502,
   DATABASE_ERROR: 500,
   QUEUE_ERROR: 500,
@@ -35,6 +37,7 @@ const SAFE_PUBLIC_MESSAGE: Record<ErrorCode, string> = {
   AUTHORIZATION_ERROR: "You are not authorized to perform this action.",
   RATE_LIMIT_ERROR: "Rate limit exceeded. Please retry later.",
   X_API_ERROR: "Upstream X API error.",
+  REDDIT_API_ERROR: "Upstream Reddit API error.",
   CLAUDE_API_ERROR: "Upstream Claude API error.",
   DATABASE_ERROR: "A database error occurred.",
   QUEUE_ERROR: "A queue processing error occurred.",

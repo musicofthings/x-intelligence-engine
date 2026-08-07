@@ -36,4 +36,6 @@
   }
   // Secrets: X_BEARER_TOKEN, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ALERT_WEBHOOK_URL,
   // pricing + budget vars. Set via `wrangler secret put`.
+  // Reddit collection additionally needs: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET,
+  // REDDIT_USER_AGENT. This worker never sends replies, so it needs no OAuth secrets.
 }

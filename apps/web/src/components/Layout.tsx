@@ -5,6 +5,9 @@ import { useQueryClient } from "@tanstack/react-query";
 const NAV = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/posts", label: "Intelligence Feed" },
+  { to: "/engage", label: "Engage" },
+  { to: "/campaigns", label: "Campaigns" },
+  { to: "/sessions", label: "Engagement" },
   { to: "/monitors", label: "Monitors" },
   { to: "/watchlists", label: "Watchlists" },
   { to: "/rules", label: "Rules" },

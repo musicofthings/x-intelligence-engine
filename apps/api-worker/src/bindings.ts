@@ -25,6 +25,15 @@ export interface Bindings {
   X_WEBHOOK_SECRET?: string;
   X_POST_READ_UNIT_COST_USD?: string;
   X_USER_READ_UNIT_COST_USD?: string;
+  X_OAUTH_CLIENT_ID?: string;
+  X_OAUTH_CLIENT_SECRET?: string;
+  X_OAUTH_REDIRECT_URI?: string;
+  TOKEN_ENCRYPTION_KEY?: string;
+  REDDIT_CLIENT_ID?: string;
+  REDDIT_CLIENT_SECRET?: string;
+  REDDIT_USER_AGENT?: string;
+  ENGAGE_MAX_REPLY_CHARS?: string;
+  ENGAGE_DAILY_SEND_CAP?: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
   CLAUDE_INPUT_COST_PER_MILLION?: string;

@@ -2,10 +2,17 @@ import type {
   Monitor,
   NormalizedXPost,
   Alert,
+  Campaign,
   Digest,
+  EngagementEvent,
+  EngagementSession,
   IngestionRun,
+  Network,
+  ReplyDraft,
   ScreeningRecord,
   PostState,
+  SentReply,
+  VoiceProfile,
   Watchlist,
   WatchlistAccount,
 } from "@xie/shared";
@@ -14,6 +21,8 @@ import { bool, intOf, jsonParse } from "./d1.js";
 type Row = Record<string, unknown>;
 const str = (v: unknown): string => (v == null ? "" : String(v));
 const strOrNull = (v: unknown): string | null => (v == null ? null : String(v));
+/** Columns added in 0007 are absent on rows read before the migration ran. */
+const network = (v: unknown): Network => (v === "reddit" ? "reddit" : "x");
 
 export function rowToMonitor(r: Row): Monitor {
   return {
@@ -22,6 +31,9 @@ export function rowToMonitor(r: Row): Monitor {
     slug: str(r.slug),
     description: strOrNull(r.description),
     type: str(r.type) as Monitor["type"],
+    network: network(r.network),
+    subreddits: jsonParse<string[]>(r.subreddits_json, []),
+    keywords: jsonParse<string[]>(r.keywords_json, []),
     enabled: bool(r.enabled),
     priority: intOf(r.priority, 50),
     xQuery: strOrNull(r.x_query),
@@ -56,6 +68,7 @@ export interface PostRow extends NormalizedXPost {
 export function rowToPost(r: Row): PostRow {
   return {
     id: str(r.id),
+    network: network(r.network),
     xPostId: str(r.x_post_id),
     authorId: str(r.author_id),
     authorUsername: strOrNull(r.author_username),
@@ -179,6 +192,130 @@ export function rowToWatchlist(r: Row): Watchlist {
     slug: str(r.slug),
     description: strOrNull(r.description),
     enabled: bool(r.enabled),
+    createdAt: str(r.created_at),
+    updatedAt: str(r.updated_at),
+  };
+}
+
+export function rowToVoiceProfile(r: Row): VoiceProfile {
+  return {
+    id: str(r.id),
+    name: str(r.name),
+    tone: str(r.tone),
+    audience: strOrNull(r.audience),
+    perspective: strOrNull(r.perspective),
+    do: jsonParse<string[]>(r.do_json, []),
+    dont: jsonParse<string[]>(r.dont_json, []),
+    sampleReplies: jsonParse<string[]>(r.sample_replies_json, []),
+    maxChars: intOf(r.max_chars, 260),
+    createdAt: str(r.created_at),
+    updatedAt: str(r.updated_at),
+  };
+}
+
+export function rowToCampaign(r: Row): Campaign {
+  const nets = jsonParse<string[]>(r.networks_json, ["x"]);
+  return {
+    id: str(r.id),
+    name: str(r.name),
+    slug: str(r.slug),
+    description: strOrNull(r.description),
+    enabled: bool(r.enabled),
+    networks: nets.filter((n): n is Network => n === "x" || n === "reddit"),
+    goalRepliesPerDay: intOf(r.goal_replies_per_day, 10),
+    voiceProfileId: strOrNull(r.voice_profile_id),
+    strategy: strOrNull(r.strategy),
+    createdAt: str(r.created_at),
+    updatedAt: str(r.updated_at),
+  };
+}
+
+export function rowToReplyDraft(r: Row): ReplyDraft {
+  return {
+    id: str(r.id),
+    postId: str(r.post_id),
+    campaignId: strOrNull(r.campaign_id),
+    voiceProfileId: strOrNull(r.voice_profile_id),
+    body: str(r.body),
+    status: str(r.status) as ReplyDraft["status"],
+    source: str(r.source) as ReplyDraft["source"],
+    model: strOrNull(r.model),
+    promptVersion: strOrNull(r.prompt_version),
+    inputTokens: r.input_tokens == null ? null : intOf(r.input_tokens),
+    outputTokens: r.output_tokens == null ? null : intOf(r.output_tokens),
+    estimatedCostUsd: Number(r.estimated_cost_usd ?? 0),
+    createdAt: str(r.created_at),
+    updatedAt: str(r.updated_at),
+  };
+}
+
+export function rowToSentReply(r: Row): SentReply {
+  return {
+    id: str(r.id),
+    draftId: strOrNull(r.draft_id),
+    postId: str(r.post_id),
+    campaignId: strOrNull(r.campaign_id),
+    network: network(r.network),
+    externalReplyId: strOrNull(r.external_reply_id),
+    body: str(r.body),
+    idempotencyKey: str(r.idempotency_key),
+    sentAt: str(r.sent_at),
+  };
+}
+
+export function rowToEngagementSession(r: Row): EngagementSession {
+  return {
+    id: str(r.id),
+    campaignId: strOrNull(r.campaign_id),
+    goal: intOf(r.goal),
+    startedAt: str(r.started_at),
+    endedAt: strOrNull(r.ended_at),
+    reviewed: intOf(r.reviewed),
+    repliesSent: intOf(r.replies_sent),
+    skipped: intOf(r.skipped),
+    follows: intOf(r.follows),
+    durationSeconds: intOf(r.duration_seconds),
+  };
+}
+
+export function rowToEngagementEvent(r: Row): EngagementEvent {
+  return {
+    id: str(r.id),
+    sessionId: strOrNull(r.session_id),
+    campaignId: strOrNull(r.campaign_id),
+    postId: str(r.post_id),
+    kind: str(r.kind) as EngagementEvent["kind"],
+    metadata: jsonParse<Record<string, unknown> | null>(r.metadata_json, null),
+    createdAt: str(r.created_at),
+  };
+}
+
+/** Encrypted-at-rest OAuth record. `*_enc` fields never leave the server. */
+export interface OAuthTokenRow {
+  id: string;
+  accountKey: string;
+  network: Network;
+  externalUserId: string | null;
+  username: string | null;
+  accessTokenEnc: string;
+  refreshTokenEnc: string | null;
+  scope: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function rowToOAuthToken(r: Row): OAuthTokenRow {
+  return {
+    id: str(r.id),
+    accountKey: str(r.account_key),
+    network: network(r.network),
+    externalUserId: strOrNull(r.external_user_id),
+    username: strOrNull(r.username),
+    accessTokenEnc: str(r.access_token_enc),
+    refreshTokenEnc: strOrNull(r.refresh_token_enc),
+    scope: strOrNull(r.scope),
+    expiresAt: strOrNull(r.expires_at),
     createdAt: str(r.created_at),
     updatedAt: str(r.updated_at),
   };

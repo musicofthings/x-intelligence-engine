@@ -4,6 +4,7 @@ import {
   checkXBudget, checkClaudeBudget, PROMPT_VERSIONS, type BudgetLimits, type BudgetState, type Env,
 } from "@xie/config";
 import { XClient, normalizeSearchResponse, isRepostDuplicate } from "@xie/x-client";
+import { RedditClient, buildRedditQuery, cleanSubreddit, normalizeRedditListing } from "@xie/reddit-client";
 import { prefilter, screenPost, evaluateAlert, type PrefilterContext } from "@xie/screening";
 import { createLogger, jobKey, type Logger, type NormalizedXPost } from "@xie/shared";
 import type { Bindings, IngestMessage, ScreeningMessage } from "./bindings.js";
@@ -52,9 +53,9 @@ async function budgetState(repo: Repositories, nowMs: number): Promise<BudgetSta
   return { xDailyUsed, xMonthlyUsed, claudeDailyRequests };
 }
 
-/** Dispatcher (spec §28/§29): enqueue collect jobs for due monitors. */
+/** Dispatcher (spec §28/§29): enqueue collect jobs for due X monitors. */
 export async function dispatchDueMonitors(ctx: Ctx, nowMs: number): Promise<number> {
-  const due = await ctx.repo.dueMonitors(nowMs);
+  const due = (await ctx.repo.dueMonitors(nowMs)).filter((m) => m.network !== "reddit");
   for (const m of due) {
     if (m.type === "filtered_stream_rule") continue; // stream arrives via webhook
     await ctx.bindings.INGEST_QUEUE.send({
@@ -64,6 +65,114 @@ export async function dispatchDueMonitors(ctx: Ctx, nowMs: number): Promise<numb
   }
   ctx.logger.info("dispatch.done", { event: "dispatch.done", status: due.length });
   return due.length;
+}
+
+/**
+ * Reddit dispatcher: enqueue collect jobs for due Reddit monitors. Gated by its own
+ * cron switch so Reddit can be turned on and off independently of X collection.
+ */
+export async function dispatchRedditMonitors(ctx: Ctx, nowMs: number): Promise<number> {
+  if (!capabilities(ctx.env).redditConfigured) {
+    ctx.logger.warn("dispatch.reddit_not_configured", { event: "dispatch.reddit_not_configured" });
+    return 0;
+  }
+  const due = (await ctx.repo.dueMonitors(nowMs)).filter((m) => m.network === "reddit");
+  for (const m of due) {
+    await ctx.bindings.INGEST_QUEUE.send({
+      schema_version: 1, event_id: crypto.randomUUID(), source_type: "reddit_collect",
+      monitor_id: m.id, received_at: new Date(nowMs).toISOString(), payload: { trigger: "cron" },
+    } satisfies IngestMessage);
+  }
+  ctx.logger.info("dispatch.reddit", { event: "dispatch.reddit", status: due.length });
+  return due.length;
+}
+
+/**
+ * Collect one Reddit monitor. Runs through the SAME downstream path as X (upsert →
+ * match → prefilter → screening queue), so Reddit posts get identical treatment.
+ *
+ * Reddit's API is free, so there is no X-style resource budget here — the Claude
+ * budget still gates screening downstream, which is where the real cost is.
+ */
+async function handleRedditCollect(ctx: Ctx, msg: IngestMessage, nowMs: number): Promise<void> {
+  if (!capabilities(ctx.env).redditConfigured) {
+    ctx.logger.warn("collect.reddit_not_configured", { event: "collect.reddit_not_configured" });
+    return;
+  }
+  const monitor = await ctx.repo.getMonitor(msg.monitor_id);
+  if (!monitor || !monitor.enabled) return;
+
+  const runKey = jobKey("collect", monitor.id, Math.floor(nowMs / 60000));
+  await ctx.repo.startRun(monitor.id, runKey, "running");
+
+  const subreddits = monitor.subreddits.map(cleanSubreddit).filter(Boolean);
+  const query = buildRedditQuery(monitor.keywords);
+  if (!query && !subreddits.length) {
+    await ctx.repo.finishRun(runKey, { status: "failed", error: "monitor has no keywords or subreddits" });
+    return;
+  }
+
+  const client = new RedditClient(
+    {
+      clientId: ctx.env.REDDIT_CLIENT_ID,
+      clientSecret: ctx.env.REDDIT_CLIENT_SECRET,
+      userAgent: ctx.env.REDDIT_USER_AGENT,
+    },
+    globalFetch,
+  );
+
+  try {
+    const limit = monitor.maxResultsPerRun;
+    const r = query
+      ? await client.search({ query, subreddits, limit, sort: "new" }, nowMs)
+      : await client.subredditNew(subreddits, { limit }, nowMs);
+    const { posts } = normalizeRedditListing(r.data);
+
+    // `since_id` holds the newest fullname we've already ingested; stop there so a
+    // busy subreddit doesn't re-screen the same posts every run.
+    const cutoff = monitor.sinceId;
+    const fresh = cutoff ? takeUntil(posts, (p) => p.xPostId === cutoff) : posts;
+
+    await ctx.repo.recordUsage({
+      provider: "x", operation: "reddit_collect", monitorId: monitor.id,
+      resourceCount: 0, requestCount: 1, estimatedCostUsd: 0,
+    });
+    const processed = await processPosts(ctx, fresh, monitor.id, monitor.prefilterThreshold, monitor.priority, nowMs);
+
+    await ctx.repo.finishRun(runKey, {
+      status: "success", postsRequested: limit, postsReceived: posts.length,
+      postsNew: processed.newCount, postsDuplicate: processed.dupCount, postsEnqueued: processed.enqueued,
+      estimatedXCostUsd: 0,
+    });
+    await ctx.repo.setMonitorRunResult(monitor.id, {
+      lastRunAt: new Date(nowMs).toISOString(), lastSuccessAt: new Date(nowMs).toISOString(),
+      lastError: null, sinceId: posts[0]?.xPostId ?? null,
+    });
+  } catch (e) {
+    const err = e as { code?: string; detail?: { status?: number; body?: string } };
+    const status = err.detail?.status;
+    const body = typeof err.detail?.body === "string" ? err.detail.body.slice(0, 300) : "";
+    const message = status ? `Reddit ${status}: ${body}` : e instanceof Error ? e.message : "collection failed";
+    ctx.logger.error("collect.reddit_failed", {
+      event: "collect.reddit_failed", monitor_id: monitor.id, error_code: err.code, status, detail: body,
+    });
+    await ctx.repo.finishRun(runKey, { status: "failed", error: message });
+    await ctx.repo.setMonitorRunResult(monitor.id, { lastRunAt: new Date(nowMs).toISOString(), lastError: message });
+
+    // Bad credentials or a banned/private subreddit won't fix themselves on retry.
+    if (status === 401 || status === 403 || status === 404) {
+      await ctx.repo.setMonitorEnabled(monitor.id, false);
+      ctx.logger.warn("collect.monitor_paused", { event: "collect.monitor_paused", monitor_id: monitor.id, status });
+      return;
+    }
+    throw e; // transient — let the queue retry
+  }
+}
+
+/** Items up to (not including) the first match. Returns everything if no match. */
+function takeUntil<T>(items: T[], stop: (item: T) => boolean): T[] {
+  const idx = items.findIndex(stop);
+  return idx === -1 ? items : items.slice(0, idx);
 }
 
 /** Watchlist dispatcher (spec §6.5, §7.2): enqueue timeline reads for due accounts. */
@@ -137,6 +246,7 @@ async function handleWatchlistCollect(ctx: Ctx, msg: IngestMessage, nowMs: numbe
 /** Handle one ingest message: webhook payload, monitor collect, or watchlist timeline. */
 export async function handleIngest(ctx: Ctx, msg: IngestMessage, nowMs: number): Promise<void> {
   if (msg.source_type === "user_timeline") return handleWatchlistCollect(ctx, msg, nowMs);
+  if (msg.source_type === "reddit_collect") return handleRedditCollect(ctx, msg, nowMs);
 
   const caps = capabilities(ctx.env);
   let posts: NormalizedXPost[] = [];

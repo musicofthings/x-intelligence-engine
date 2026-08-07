@@ -1,9 +1,10 @@
 # X Intelligence Engine (XIE)
 
 A private intelligence application that continuously collects selected public posts from
-the **official X API**, runs a deterministic relevance prefilter, sends only qualified
-candidates to Claude for structured screening, stores results in Cloudflare D1, and
-exposes a professional analyst dashboard plus a secure remote MCP server for Claude Code.
+the **official X API** and the **official Reddit API**, runs a deterministic relevance
+prefilter, sends only qualified candidates to Claude for structured screening, stores
+results in Cloudflare D1, and exposes a professional analyst dashboard, an engagement
+console for drafting and sending replies, plus a secure remote MCP server for Claude Code.
 
 > Built for AI/ML, AI-for-biology, drug discovery, oncology, ctDNA/MRD, genomics,
 > long-read sequencing, regulatory, and biopharma competitive intelligence.
@@ -39,15 +40,20 @@ apps/pipeline-worker Cron + queue consumers: collect/prefilter/screen/digest (Wo
 packages/shared     Canonical types, errors, logging, string-safe ids, URL builder
 packages/config     Env, pricing, budgets, score bands, scheduling, prompt versions
 packages/db         D1 migrations + typed repository layer (all SQL lives here)
-packages/x-client   Official X API client + normalization + rate-limit + webhook HMAC
+packages/x-client   Official X API client + OAuth2/PKCE + reply write + webhook HMAC
+packages/reddit-client Official Reddit API client + normalization to the canonical shape
 packages/screening  Deterministic prefilter + Claude prompt/schema/client + alert eval
+packages/engage     Deterministic queue ranking + pre-send safety + Claude reply drafting
 packages/mcp        Read-only MCP tools over the local DB
 ```
 
 ## Capabilities
 
-- Official-X-API-only collection (recent search, user/list timelines, webhook) with
-  capability detection and graceful polling fallback.
+### Intelligence
+
+- Official-API-only collection — X (recent search, user/list timelines, webhook) and
+  Reddit (keyword search, subreddit firehose) — with capability detection and graceful
+  polling fallback.
 - Deterministic, versioned, unit-tested prefilter with factor-level explanations.
 - Claude structured screening (forced tool-use + strict validation + repair retry) with
   prompt-injection defenses.
@@ -56,6 +62,26 @@ packages/mcp        Read-only MCP tools over the local DB
   Cloudflare Queues' at-least-once delivery.
 - Alerts, daily digests (assembled from stored records — no invented facts), analyst
   dashboard, and a secure remote MCP server (read-only by default).
+
+### Engagement
+
+- **Campaigns** — independent strategies, each with its own networks, monitors, voice, and
+  daily goal. A network can be detached without deleting the campaign.
+- **Engage inbox** — a triage queue ranked by strategic score, a reply-window recency
+  bonus, conversation velocity, and the analyst's own engage/skip history. The learning is
+  counting, not a model, so every ordering decision is explainable.
+- **AI reply drafting** conditioned on a voice profile, with rewrite / autocomplete /
+  shorter / longer transforms.
+- **Deterministic pre-send checks** — engagement-bait phrasing, near-duplicates of replies
+  already sent, over-used links, hashtag/mention spam, shouting, self-promotion. Blocking
+  checks cannot be bypassed; advisory ones are dismissible per reply.
+- **One-click send** on X under user-context OAuth 2.0, with a UNIQUE idempotency claim
+  taken before the network call. No auto-posting, no scheduling, no bulk replies —
+  enforced server-side, not just in the UI.
+- **Daily goals and session stats** — replies sent, items reviewed, skipped, time spent.
+
+Drafting and safety checks need no credentials beyond the Anthropic key the app already
+uses. See [`docs/ENGAGEMENT_SETUP.md`](docs/ENGAGEMENT_SETUP.md) for sending and Reddit.
 
 ## Prerequisites
 
@@ -96,11 +122,16 @@ pnpm --filter @xie/web build
 
 Full, exact steps: [`docs/CLOUDFLARE_SETUP.md`](docs/CLOUDFLARE_SETUP.md). Also see
 [`docs/X_API_SETUP.md`](docs/X_API_SETUP.md), [`docs/CLAUDE_SETUP.md`](docs/CLAUDE_SETUP.md),
-[`docs/MCP_SETUP.md`](docs/MCP_SETUP.md).
+[`docs/MCP_SETUP.md`](docs/MCP_SETUP.md),
+[`docs/ENGAGEMENT_SETUP.md`](docs/ENGAGEMENT_SETUP.md).
 
 ## Security
 
-- No scraping — official X API only.
+- No scraping — official X and Reddit APIs only.
+- Sending is manual and per-reply: no auto-post, no scheduling, no bulk endpoint exists.
+  Every send takes a UNIQUE idempotency claim before the network call and is audit-logged.
+- OAuth tokens are AES-256-GCM encrypted at rest in D1; ciphertext never leaves the server
+  and token material is never serialized to the browser.
 - All external content (posts, bios, URLs, webhook payloads) is untrusted; rendered as
   plain text (never `dangerouslySetInnerHTML`); the screening prompt defends against
   injection.

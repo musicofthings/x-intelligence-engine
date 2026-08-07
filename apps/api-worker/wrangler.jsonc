@@ -14,6 +14,9 @@
     "APP_TIMEZONE": "Asia/Kolkata",
     "AUTH_MODE": "cloudflare_access",
     "X_API_BASE_URL": "https://api.x.com",
+    "X_OAUTH_REDIRECT_URI": "https://app.seyarkainunnarivu.com/api/oauth/x/callback",
+    "ENGAGE_MAX_REPLY_CHARS": "280",
+    "ENGAGE_DAILY_SEND_CAP": "50",
     "MCP_ALLOW_MUTATIONS": "false",
     "ENABLE_RAW_ARCHIVE": "false",
     "ENABLE_VECTOR_SEARCH": "false",
@@ -44,4 +47,9 @@
   // Secrets (set via `wrangler secret put`): X_BEARER_TOKEN, X_WEBHOOK_SECRET,
   // ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MCP_API_TOKEN, CF_ACCESS_TEAM_DOMAIN,
   // CF_ACCESS_AUD, ALLOWED_EMAILS, ALERT_WEBHOOK_URL, budget/pricing vars.
+  //
+  // Engagement secrets (only needed for sending replies / Reddit collection):
+  // X_OAUTH_CLIENT_ID, X_OAUTH_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY,
+  // REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USER_AGENT.
+  // X_OAUTH_REDIRECT_URI above must match the callback registered on the X app exactly.
 }

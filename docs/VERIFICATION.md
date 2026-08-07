@@ -36,6 +36,44 @@ and their real outcomes. No results are fabricated.
 - Deployed to Cloudflare: api-worker (serves API + MCP + SPA via Static Assets) on `app.seyarkainunnarivu.com` behind Cloudflare Access (One-time PIN), pipeline-worker (cron + queue consumers), D1 + queues provisioned, migrations applied.
 - Live X collection → prefilter → Claude screening → feed confirmed working end to end.
 
+## Engagement layer + Reddit (2026-08-07)
+
+Commands actually run in this environment:
+
+```powershell
+corepack pnpm install
+corepack pnpm -r --if-present typecheck   # 11 workspaces, clean
+corepack pnpm -r --if-present test        # 216 tests across 13 files, all passing
+corepack pnpm --filter @xie/web build     # clean, 312 kB / 94 kB gzip
+```
+
+> The globally-installed `pnpm` shim on this machine is broken (its own install dir is
+> missing), so `pnpm …` fails with MODULE_NOT_FOUND. `corepack pnpm …` works and resolves
+> the pinned 11.9.0. The root `lint`/`typecheck`/`test` scripts shell out to bare `pnpm`,
+> so invoke the recursive form directly as above until the shim is reinstalled.
+
+### Test breakdown (216 total)
+
+- `@xie/shared` — 21 (+9: AES-GCM round-trip, wrong-key/tampered/truncated rejection, PKCE helpers)
+- `@xie/config` — 17 (unchanged)
+- `@xie/x-client` — 34 (+19: PKCE consent URL, offline.access scope, code exchange, public vs. confidential client auth, refresh, expiry skew, reply POST body/validation/error mapping, `/2/users/me`)
+- `@xie/reddit-client` — 25 (subreddit cleaning, query building, listing normalization + NSFW/stickied/removed filtering, app-only token caching and re-auth on 401, search vs. subreddit-new URLs, limit clamping, error mapping, rate-limit headers)
+- `@xie/engage` — 34 (trigram similarity, link-host normalization, every safety rule incl. blocking vs. advisory severity, recency/velocity/affinity curves, rank ordering and stability, draft validation, prompt fencing of untrusted post text)
+- `@xie/screening` — 16 (unchanged)
+- `@xie/db` — 52 (+35: voice/campaign CRUD, network detach, Reddit posts alongside X without id collision, draft lifecycle, send claim/release idempotency, session freeze-on-end, duplicate-event suppression, learned signals, engage-candidate filtering, OAuth upsert preserving refresh tokens, single-use PKCE state, reset preserving config)
+- `@xie/mcp` — 7 (unchanged)
+- `@xie/api-worker` — 8 (unchanged)
+- `@xie/pipeline-worker` — 2 (unchanged)
+
+### Not verified — needs live credentials
+
+The X OAuth consent flow, an actual reply POST, and live Reddit collection have **not**
+been run. They are unit-tested against stubbed `fetch` only. Exercising them needs
+`X_OAUTH_CLIENT_ID` + `TOKEN_ENCRYPTION_KEY`, a write-enabled X API tier with the callback
+URL registered, and `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET`/`REDDIT_USER_AGENT`.
+Migration `0007_engagement` has been applied in the node:sqlite test harness on every run,
+but not against remote D1.
+
 ## Not verified here (needs external credentials / Cloudflare)
 
 - `pnpm lint` — no ESLint config wired yet (CI step present; add `eslint.config.js` to activate).

@@ -38,6 +38,23 @@ export const EnvSchema = z.object({
   X_POST_READ_UNIT_COST_USD: numFromString(0),
   X_USER_READ_UNIT_COST_USD: numFromString(0),
 
+  // X OAuth 2.0 user context — required only to POST replies (reads use the bearer).
+  X_OAUTH_CLIENT_ID: z.string().optional().default(""),
+  X_OAUTH_CLIENT_SECRET: z.string().optional().default(""),
+  /** Absolute callback URL registered on the X app, e.g. https://host/api/oauth/x/callback */
+  X_OAUTH_REDIRECT_URI: z.string().optional().default(""),
+  /** base64 32-byte AES-GCM key protecting OAuth tokens at rest in D1. */
+  TOKEN_ENCRYPTION_KEY: z.string().optional().default(""),
+
+  // Reddit (official API, application-only OAuth).
+  REDDIT_CLIENT_ID: z.string().optional().default(""),
+  REDDIT_CLIENT_SECRET: z.string().optional().default(""),
+  REDDIT_USER_AGENT: z.string().optional().default(""),
+
+  // Engagement layer.
+  ENGAGE_MAX_REPLY_CHARS: numFromString(280),
+  ENGAGE_DAILY_SEND_CAP: numFromString(50),
+
   ANTHROPIC_API_KEY: z.string().optional().default(""),
   ANTHROPIC_MODEL: z.string().optional().default(""),
   CLAUDE_INPUT_COST_PER_MILLION: numFromString(3),
@@ -92,6 +109,10 @@ export interface Capabilities {
   rawArchiveEnabled: boolean;
   vectorSearchEnabled: boolean;
   demoMode: boolean;
+  /** X user-context OAuth is fully configured, so replies can be sent. */
+  xWriteConfigured: boolean;
+  /** Reddit collection is configured (id + secret + the User-Agent Reddit requires). */
+  redditConfigured: boolean;
 }
 
 export function capabilities(env: Env): Capabilities {
@@ -103,6 +124,14 @@ export function capabilities(env: Env): Capabilities {
     rawArchiveEnabled: env.ENABLE_RAW_ARCHIVE,
     vectorSearchEnabled: env.ENABLE_VECTOR_SEARCH,
     demoMode: env.DEMO_MODE && env.APP_ENV !== "production",
+    xWriteConfigured:
+      env.X_OAUTH_CLIENT_ID.length > 0 &&
+      env.X_OAUTH_REDIRECT_URI.length > 0 &&
+      env.TOKEN_ENCRYPTION_KEY.length > 0,
+    redditConfigured:
+      env.REDDIT_CLIENT_ID.length > 0 &&
+      env.REDDIT_CLIENT_SECRET.length > 0 &&
+      env.REDDIT_USER_AGENT.length > 0,
   };
 }
 

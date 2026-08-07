@@ -26,9 +26,15 @@ importers:
       '@xie/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@xie/engage':
+        specifier: workspace:*
+        version: link:../../packages/engage
       '@xie/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
+      '@xie/reddit-client':
+        specifier: workspace:*
+        version: link:../../packages/reddit-client
       '@xie/screening':
         specifier: workspace:*
         version: link:../../packages/screening
@@ -63,6 +69,12 @@ importers:
       '@xie/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@xie/engage':
+        specifier: workspace:*
+        version: link:../../packages/engage
+      '@xie/reddit-client':
+        specifier: workspace:*
+        version: link:../../packages/reddit-client
       '@xie/screening':
         specifier: workspace:*
         version: link:../../packages/screening
@@ -155,6 +167,22 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)
 
+  packages/engage:
+    dependencies:
+      '@xie/config':
+        specifier: workspace:*
+        version: link:../config
+      '@xie/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)
+
   packages/mcp:
     dependencies:
       '@xie/db':
@@ -166,6 +194,19 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)
+
+  packages/reddit-client:
+    dependencies:
+      '@xie/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       typescript:
         specifier: ^5.7.3

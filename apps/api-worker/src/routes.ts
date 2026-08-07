@@ -2,12 +2,16 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { AppError } from "@xie/shared";
 import { queryFeed } from "@xie/db";
-import { pricingFromEnv, estimateXCost } from "@xie/config";
+import { capabilities, pricingFromEnv, estimateXCost } from "@xie/config";
 import type { HonoEnv } from "./bindings.js";
+import { engageRoutes } from "./engage-routes.js";
 
 /** REST API routes (spec §19). All DB access via repositories; validation via Zod. */
 export function apiRoutes(): Hono<HonoEnv> {
   const app = new Hono<HonoEnv>();
+
+  // Engagement layer: campaigns, voice, engage inbox, drafts, safety, send, OAuth, Reddit.
+  app.route("/", engageRoutes());
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
   app.get("/dashboard/summary", async (c) => {
@@ -172,8 +176,12 @@ export function apiRoutes(): Hono<HonoEnv> {
     name: z.string().min(1).max(120),
     slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/),
     type: z.enum(["recent_search", "user_watchlist", "x_list", "filtered_stream_rule"]),
+    network: z.enum(["x", "reddit"]).optional(),
     description: z.string().max(1000).optional(),
     x_query: z.string().max(1024).optional(),
+    // Reddit monitors: up to 10 keywords and up to 10 subreddit filters.
+    subreddits: z.array(z.string().min(1).max(60)).max(10).optional(),
+    keywords: z.array(z.string().min(1).max(80)).max(10).optional(),
     priority: z.number().int().min(0).max(100).optional(),
     poll_interval_minutes: z.number().int().min(5).max(1440).optional(),
     max_results_per_run: z.number().int().min(10).max(100).optional(),
@@ -184,9 +192,16 @@ export function apiRoutes(): Hono<HonoEnv> {
   app.post("/monitors", async (c) => {
     const repo = c.get("repo");
     const b = monitorBody.parse(await c.req.json());
+    const network = b.network ?? "x";
+    // A Reddit monitor with neither keywords nor subreddits has nothing to collect.
+    if (network === "reddit" && !(b.keywords ?? []).length && !(b.subreddits ?? []).length) {
+      throw new AppError("VALIDATION_ERROR", "A Reddit monitor needs at least one keyword or subreddit");
+    }
     const id = await repo.createMonitor({
-      name: b.name, slug: b.slug, type: b.type, description: b.description ?? null,
-      xQuery: b.x_query ?? null, priority: b.priority ?? 50, pollIntervalMinutes: b.poll_interval_minutes ?? 60,
+      name: b.name, slug: b.slug, type: b.type, network,
+      description: b.description ?? null,
+      xQuery: b.x_query ?? null, subreddits: b.subreddits ?? [], keywords: b.keywords ?? [],
+      priority: b.priority ?? 50, pollIntervalMinutes: b.poll_interval_minutes ?? 60,
       maxResultsPerRun: b.max_results_per_run ?? 25, prefilterThreshold: b.prefilter_threshold ?? 40,
       excludedTerms: b.excluded_terms ?? [], requiredTerms: b.required_terms ?? [], enabled: false,
     });
@@ -377,13 +392,16 @@ export function apiRoutes(): Hono<HonoEnv> {
     }
     // Capability flags only — never secret values (spec §6.11).
     const env = c.get("env");
+    const caps = capabilities(env);
     return c.json({
       data: {
         settings,
         capabilities: {
-          x_configured: !!env.X_BEARER_TOKEN,
-          claude_configured: !!env.ANTHROPIC_API_KEY && !!env.ANTHROPIC_MODEL,
-          webhook_configured: !!env.X_WEBHOOK_SECRET,
+          x_configured: caps.xApiConfigured,
+          claude_configured: caps.claudeConfigured,
+          webhook_configured: caps.webhookConfigured,
+          x_write_configured: caps.xWriteConfigured,
+          reddit_configured: caps.redditConfigured,
           timezone: env.APP_TIMEZONE,
         },
       },

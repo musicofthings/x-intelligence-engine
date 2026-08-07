@@ -16,6 +16,9 @@ export interface Bindings {
   ANTHROPIC_MODEL?: string;
   CLAUDE_INPUT_COST_PER_MILLION?: string;
   CLAUDE_OUTPUT_COST_PER_MILLION?: string;
+  REDDIT_CLIENT_ID?: string;
+  REDDIT_CLIENT_SECRET?: string;
+  REDDIT_USER_AGENT?: string;
   ALERT_WEBHOOK_URL?: string;
   X_DAILY_RESOURCE_BUDGET?: string;
   X_MONTHLY_RESOURCE_BUDGET?: string;
@@ -29,7 +32,7 @@ export interface Bindings {
 export interface IngestMessage {
   schema_version: 1;
   event_id: string;
-  source_type: "recent_search" | "user_timeline" | "x_list" | "webhook";
+  source_type: "recent_search" | "user_timeline" | "x_list" | "webhook" | "reddit_collect";
   monitor_id: string;
   received_at: string;
   payload: Record<string, unknown>;

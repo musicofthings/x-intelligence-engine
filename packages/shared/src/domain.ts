@@ -1,5 +1,11 @@
 /** Canonical shared domain types (spec §61). Import these everywhere; never redefine. */
 
+/**
+ * How a monitor is collected. These name X API call shapes; the platform a monitor
+ * belongs to is carried separately by `network`, so a Reddit monitor is
+ * `{ type: "recent_search", network: "reddit" }` and picks search-vs-new from whether
+ * it has keywords.
+ */
 export type MonitorType =
   | "recent_search"
   | "user_watchlist"
@@ -10,7 +16,11 @@ export type SourceType =
   | "recent_search"
   | "user_timeline"
   | "x_list"
-  | "webhook";
+  | "webhook"
+  | "reddit_collect";
+
+/** Which platform a post/monitor belongs to. */
+export type Network = "x" | "reddit";
 
 export interface Monitor {
   id: string;
@@ -18,6 +28,11 @@ export interface Monitor {
   slug: string;
   description: string | null;
   type: MonitorType;
+  network: Network;
+  /** Reddit only: subreddits to restrict to (empty = site-wide). */
+  subreddits: string[];
+  /** Reddit only: keyword terms OR-ed into the search query. */
+  keywords: string[];
   enabled: boolean;
   priority: number;
   xQuery: string | null;
@@ -77,6 +92,9 @@ export interface PostMetrics {
 }
 
 export interface NormalizedXPost {
+  /** Platform this post came from. Defaults to "x" for legacy callers. */
+  network?: Network;
+  /** External post id — an X snowflake id, or a Reddit fullname (`t3_…`). */
   xPostId: string;
   authorId: string;
   authorUsername: string | null;
@@ -260,4 +278,160 @@ export interface CursorPage<T> {
     next_cursor: string | null;
     has_more: boolean;
   };
+}
+
+// ── Engagement layer ─────────────────────────────────────────────────────────
+
+/** One-time "how do I sound" setup that reply drafting is conditioned on. */
+export interface VoiceProfile {
+  id: string;
+  name: string;
+  tone: string;
+  audience: string | null;
+  perspective: string | null;
+  /** Things the reply should do (e.g. "cite a concrete number"). */
+  do: string[];
+  /** Things the reply must never do (e.g. "no emoji", "never pitch"). */
+  dont: string[];
+  /** Prior replies used as few-shot style anchors. */
+  sampleReplies: string[];
+  maxChars: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** An independent strategy: its own networks, monitors, voice, and daily goal. */
+export interface Campaign {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  enabled: boolean;
+  networks: Network[];
+  goalRepliesPerDay: number;
+  voiceProfileId: string | null;
+  strategy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ReplyDraftStatus = "draft" | "sent" | "discarded";
+export type ReplyDraftSource = "ai" | "manual" | "transform";
+
+export interface ReplyDraft {
+  id: string;
+  postId: string;
+  campaignId: string | null;
+  voiceProfileId: string | null;
+  body: string;
+  status: ReplyDraftStatus;
+  source: ReplyDraftSource;
+  model: string | null;
+  promptVersion: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  estimatedCostUsd: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SentReply {
+  id: string;
+  draftId: string | null;
+  postId: string;
+  campaignId: string | null;
+  network: Network;
+  externalReplyId: string | null;
+  body: string;
+  idempotencyKey: string;
+  sentAt: string;
+}
+
+export type EngagementEventKind = "engaged" | "skipped" | "replied" | "followed" | "drafted";
+
+export interface EngagementEvent {
+  id: string;
+  sessionId: string | null;
+  campaignId: string | null;
+  postId: string;
+  kind: EngagementEventKind;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface EngagementSession {
+  id: string;
+  campaignId: string | null;
+  goal: number;
+  startedAt: string;
+  endedAt: string | null;
+  reviewed: number;
+  repliesSent: number;
+  skipped: number;
+  follows: number;
+  durationSeconds: number;
+}
+
+/** Aggregate triage history used to sharpen queue ranking over time. */
+export interface EngagementSignals {
+  /** author username (lowercased) → net engaged-minus-skipped count. */
+  authorAffinity: Record<string, number>;
+  /** topic → net engaged-minus-skipped count. */
+  topicAffinity: Record<string, number>;
+  totalEngaged: number;
+  totalSkipped: number;
+}
+
+export type ReplyTransform = "rewrite" | "autocomplete" | "shorter" | "longer";
+
+export type SafetyWarningCode =
+  | "engagement_bait"
+  | "duplicate_reply"
+  | "link_overuse"
+  | "too_long"
+  | "empty"
+  | "excessive_hashtags"
+  | "excessive_mentions"
+  | "all_caps"
+  | "self_promo";
+
+export type SafetySeverity = "warn" | "block";
+
+export interface SafetyWarning {
+  code: SafetyWarningCode;
+  severity: SafetySeverity;
+  message: string;
+  /** The literal text that triggered it, when applicable. */
+  evidence: string | null;
+}
+
+export interface SafetyReport {
+  warnings: SafetyWarning[];
+  /** True when nothing is a hard block. Warn-level items are dismissible. */
+  sendable: boolean;
+  rulesVersion: string;
+}
+
+/** A ranked item in the engage inbox. */
+export interface EngageItem {
+  post: {
+    id: string;
+    network: Network;
+    xPostId: string;
+    authorUsername: string | null;
+    authorName: string | null;
+    text: string;
+    url: string | null;
+    createdAt: string;
+    metrics: PostMetrics;
+  };
+  topic: string | null;
+  strategicScore: number | null;
+  relevanceScore: number | null;
+  summary: string | null;
+  /** Queue rank score (0..100) — screening + recency + learned affinity. */
+  queueScore: number;
+  reasons: string[];
+  draftCount: number;
+  monitorNames: string[];
 }

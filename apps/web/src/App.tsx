@@ -7,8 +7,10 @@ import { PostDetail } from "./pages/PostDetail";
 import { Monitors } from "./pages/Monitors";
 import { Alerts } from "./pages/Alerts";
 import { Digests } from "./pages/Digests";
-import { Usage, Settings, System, Sources, Rules } from "./pages/Misc";
+import { Usage, Settings, System, Sources, Rules, Sessions } from "./pages/Misc";
 import { Watchlists } from "./pages/Watchlists";
+import { Engage } from "./pages/Engage";
+import { Campaigns } from "./pages/Campaigns";
 import { ErrorState } from "./components/ui";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -31,6 +33,9 @@ const router = createBrowserRouter([
       { path: "dashboard", element: <Dashboard /> },
       { path: "posts", element: <Feed /> },
       { path: "posts/:id", element: <PostDetail /> },
+      { path: "engage", element: <Engage /> },
+      { path: "campaigns", element: <Campaigns /> },
+      { path: "sessions", element: <Sessions /> },
       { path: "monitors", element: <Monitors /> },
       { path: "watchlists", element: <Watchlists /> },
       { path: "rules", element: <Rules /> },

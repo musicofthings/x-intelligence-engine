@@ -17,6 +17,8 @@
     "@xie/db": "workspace:*",
     "@xie/screening": "workspace:*",
     "@xie/x-client": "workspace:*",
+    "@xie/reddit-client": "workspace:*",
+    "@xie/engage": "workspace:*",
     "@xie/mcp": "workspace:*",
     "hono": "^4.6.15",
     "zod": "^3.24.1"

@@ -16,7 +16,9 @@
     "@xie/config": "workspace:*",
     "@xie/db": "workspace:*",
     "@xie/screening": "workspace:*",
-    "@xie/x-client": "workspace:*"
+    "@xie/x-client": "workspace:*",
+    "@xie/reddit-client": "workspace:*",
+    "@xie/engage": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
