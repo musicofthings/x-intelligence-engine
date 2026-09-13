@@ -1,8 +1,8 @@
 # Session Handover
-_Generated: 2026-09-13T09:23:15Z_
+_Generated: 2026-09-13T13:29:26Z_
 _Branch: main_
-_Trigger: auto | Context at compact: 93%_
-_Compact count this project: 1_
+_Trigger: auto | Context at compact: 90%_
+_Compact count this project: 2_
 
 ---
 
@@ -11,7 +11,7 @@ _Compact count this project: 1_
 unknown
 
 **Phase:** unknown
-**Next action:** read session_handover.md
+**Next action:** read session_handover.md (auto-saved)
 
 ---
 
@@ -20,10 +20,14 @@ unknown
 
 ---
 
+---
+
+---
+
 ## 🔄 In Progress (Exact Resume Point)
 **Branch:** `main`
-**Last commit:** `7271416 feat: add LiveRound, a human-in-the-loop X/Reddit cockpit on Next.js`
-**Next immediate action:** read session_handover.md
+**Last commit:** `f331fe2 feat(liveround): ship Phase 2 OAuth, Post Ideas, billing, and contacts`
+**Next immediate action:** read session_handover.md (auto-saved)
 
 ---
 
@@ -53,7 +57,15 @@ unknown
 
 ---
 
+---
+
+---
+
 ## 🏗 Architecture Decisions Made
+| Decision | Rationale | Date |
+|----------|-----------|------|
+| Decision | Rationale | Date |
+|----------|-----------|------|
 | Decision | Rationale | Date |
 |----------|-----------|------|
 | Decision | Rationale | Date |
@@ -65,6 +77,10 @@ unknown
 | `AUTH_MODE` declared on the pipeline worker despite no HTTP surface | `loadEnv` refuses `AUTH_MODE=development` under `APP_ENV=production`, and unset defaults to `development` — flipping APP_ENV alone would have thrown on every cron tick and killed the pipeline. | 2026-08-07 |
 | Aged-out `since_id` clears the checkpoint and ACKs, without disabling the monitor | Retrying the same `since_id` can never succeed; `setMonitorRunResult`'s `COALESCE(?, since_id)` (which protects good checkpoints) meant there was no path out. Nothing is wrong with the monitor itself. | 2026-08-07 |
 | Other 400s pause the monitor instead of retrying | A malformed query will not fix itself on retry either. | 2026-08-07 |
+
+---
+
+---
 
 ---
 
@@ -106,40 +122,39 @@ bash scripts/session_sync.sh --load
 | File | Status |
 |------|--------|
 | `.env.example` | modified |
-| `.gitignore` | modified |
-| `AGENTS.md` | modified |
-| `README.md` | modified |
+| `/Users/theranosis_dx/.cursor/projects/Users-theranosis-dx-projects-x-intelligence-engine/canvases/liveround-ui-ux-audit.canvas.tsx` | modified |
 | `apps/liveround/.env.example` | modified |
-| `apps/liveround/.gitignore` | modified |
+| `apps/liveround/.next/types/validator.ts` | modified |
 | `apps/liveround/README.md` | modified |
-| `apps/liveround/drizzle/0001_init.sql` | modified |
-| `apps/liveround/next.config.ts` | modified |
-| `apps/liveround/package.json` | modified |
-| `apps/liveround/public/favicon.svg` | modified |
+| `apps/liveround/drizzle/0002_phase2.sql` | modified |
+| `apps/liveround/src/app/api/billing/checkout/route.ts` | modified |
+| `apps/liveround/src/app/api/billing/webhook/route.ts` | modified |
 | `apps/liveround/src/app/api/campaigns/route.ts` | modified |
 | `apps/liveround/src/app/api/cards/[id]/route.ts` | modified |
-| `apps/liveround/src/app/api/health/route.ts` | modified |
-| `apps/liveround/src/app/api/log/route.ts` | modified |
-| _(+37 more files not shown)_ | — |
+| `apps/liveround/src/app/api/contacts/route.ts` | modified |
+| `apps/liveround/src/app/api/cron/post-ideas/route.ts` | modified |
+| `apps/liveround/src/app/api/cron/recap/route.ts` | modified |
+| `apps/liveround/src/app/api/ideas/route.ts` | modified |
+| `apps/liveround/src/app/api/oauth/x/callback/route.ts` | modified |
+| _(+36 more files not shown)_ | — |
 
 ---
 
 ## 🌿 Git Context
 ```
 Branch  : main
-Commit  : 7271416 feat: add LiveRound, a human-in-the-loop X/Reddit cockpit on Next.js
-Status  : M apps/liveround/package.json
- M pnpm-lock.yaml
+Commit  : f331fe2 feat(liveround): ship Phase 2 OAuth, Post Ideas, billing, and contacts
+Status  : M session_handover.md
 ?? session_handover.md.lock
 ```
 
 Recent commits:
 ```
+f331fe2 feat(liveround): ship Phase 2 OAuth, Post Ideas, billing, and contacts
+5270fb4 chore(context): pre-compact snapshot [2026-09-13T09:23:15Z] ctx=93%
 7271416 feat: add LiveRound, a human-in-the-loop X/Reddit cockpit on Next.js
 5c849c4 chore: track session handover state, ignore context-kit local telemetry
 ecce06b fix(pipeline): self-heal a since_id checkpoint that aged out of X's window
-b61437c fix(pipeline): run as production, close the open workers.dev endpoint
-fe550d5 feat(engage): campaigns, AI reply drafting, pre-send safety, X sending, Reddit
 ```
 
 ---
@@ -153,6 +168,10 @@ fe550d5 feat(engage): campaigns, AI reply drafting, pre-send safety, X sending, 
   X account
 - If `pnpm` or `wrangler` suddenly fail with MODULE_NOT_FOUND, the pnpm store was wiped:
   reinstall globally rather than debugging the repo
+
+---
+
+---
 
 ---
 
