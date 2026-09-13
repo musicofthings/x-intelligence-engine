@@ -9,10 +9,12 @@
   },
   "packageManager": "pnpm@11.9.0",
   "scripts": {
+    "dev": "pnpm --filter liveround dev",
     "lint": "pnpm -r --if-present lint",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "build": "pnpm -r --if-present build",
+    "build": "pnpm --filter liveround build",
+    "build:all": "pnpm -r --if-present build",
     "deploy:api": "pnpm --filter @xie/api-worker deploy",
     "deploy:pipeline": "pnpm --filter @xie/pipeline-worker deploy",
     "deploy:web": "pnpm --filter @xie/web build && wrangler pages deploy apps/web/dist",

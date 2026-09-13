@@ -1,162 +1,22 @@
-# X Intelligence Engine (XIE)
+# LiveRound
 
-A private intelligence application that continuously collects selected public posts from
-the **official X API** and the **official Reddit API**, runs a deterministic relevance
-prefilter, sends only qualified candidates to Claude for structured screening, stores
-results in Cloudflare D1, and exposes a professional analyst dashboard, an engagement
-console for drafting and sending replies, plus a secure remote MCP server for Claude Code.
+A 15-minute lightning round for X and Reddit. Matching posts stream into a one-card
+inbox. A reply is drafted in your voice. **You** press send. LiveRound never does.
 
-> Built for AI/ML, AI-for-biology, drug discovery, oncology, ctDNA/MRD, genomics,
-> long-read sequencing, regulatory, and biopharma competitive intelligence.
+Product app: [`apps/liveround`](./apps/liveround). Start there.
 
-## Architecture
-
-```mermaid
-flowchart TD
-  X[Official X API] --> API[api-worker: webhook]
-  CRON[Cron dispatcher] --> PIPE[pipeline-worker]
-  PIPE -->|recent search / timelines / lists| X
-  API --> IQ[[x-ingest-queue]]
-  PIPE --> IQ
-  IQ --> NORM[Normalize + upsert + dedupe + match]
-  NORM --> PF[Deterministic prefilter]
-  PF -->|reject| ARCH[(archive)]
-  PF -->|qualified| SQ[[x-screening-queue]]
-  SQ --> CLAUDE[Claude structured screening]
-  CLAUDE --> D1[(Cloudflare D1)]
-  D1 --> DASH[Analyst dashboard]
-  D1 --> ALERTS[Alerts]
-  D1 --> DIGEST[Daily digests]
-  D1 --> MCP[/Remote MCP server/]
-  MCP --> CC[Claude Code]
-```
-
-## Monorepo layout
-
-```
-apps/web            React + Vite SPA (Cloudflare Pages)
-apps/api-worker     Hono REST API + MCP endpoint + X webhook (Workers)
-apps/pipeline-worker Cron + queue consumers: collect/prefilter/screen/digest (Workers)
-packages/shared     Canonical types, errors, logging, string-safe ids, URL builder
-packages/config     Env, pricing, budgets, score bands, scheduling, prompt versions
-packages/db         D1 migrations + typed repository layer (all SQL lives here)
-packages/x-client   Official X API client + OAuth2/PKCE + reply write + webhook HMAC
-packages/reddit-client Official Reddit API client + normalization to the canonical shape
-packages/screening  Deterministic prefilter + Claude prompt/schema/client + alert eval
-packages/engage     Deterministic queue ranking + pre-send safety + Claude reply drafting
-packages/mcp        Read-only MCP tools over the local DB
-```
-
-## Capabilities
-
-### Intelligence
-
-- Official-API-only collection — X (recent search, user/list timelines, webhook) and
-  Reddit (keyword search, subreddit firehose) — with capability detection and graceful
-  polling fallback.
-- Deterministic, versioned, unit-tested prefilter with factor-level explanations.
-- Claude structured screening (forced tool-use + strict validation + repair retry) with
-  prompt-injection defenses.
-- Cost controls: daily/monthly X budgets, daily Claude budget, hard-stop, usage accounting.
-- Idempotent pipeline (unique constraints, deterministic job keys, upserts) safe against
-  Cloudflare Queues' at-least-once delivery.
-- Alerts, daily digests (assembled from stored records — no invented facts), analyst
-  dashboard, and a secure remote MCP server (read-only by default).
-
-### Engagement
-
-- **Campaigns** — independent strategies, each with its own networks, monitors, voice, and
-  daily goal. A network can be detached without deleting the campaign.
-- **Engage inbox** — a triage queue ranked by strategic score, a reply-window recency
-  bonus, conversation velocity, and the analyst's own engage/skip history. The learning is
-  counting, not a model, so every ordering decision is explainable.
-- **AI reply drafting** conditioned on a voice profile, with rewrite / autocomplete /
-  shorter / longer transforms.
-- **Deterministic pre-send checks** — engagement-bait phrasing, near-duplicates of replies
-  already sent, over-used links, hashtag/mention spam, shouting, self-promotion. Blocking
-  checks cannot be bypassed; advisory ones are dismissible per reply.
-- **One-click send** on X under user-context OAuth 2.0, with a UNIQUE idempotency claim
-  taken before the network call. No auto-posting, no scheduling, no bulk replies —
-  enforced server-side, not just in the UI.
-- **Daily goals and session stats** — replies sent, items reviewed, skipped, time spent.
-
-Drafting and safety checks need no credentials beyond the Anthropic key the app already
-uses. See [`docs/ENGAGEMENT_SETUP.md`](docs/ENGAGEMENT_SETUP.md) for sending and Reddit.
-
-## Prerequisites
-
-- Node >= 20 (developed on 24), pnpm 11, a Cloudflare account, an X developer bearer
-  token, and an Anthropic API key. Wrangler for deployment.
-
-## Local setup
-
-```powershell
+```bash
 pnpm install
-cp .env.example .dev.vars      # fill in secrets locally (never commit)
-pnpm typecheck
-pnpm test
-pnpm --filter @xie/web dev     # SPA at http://localhost:5173
-# workers: `pnpm --filter @xie/api-worker dev` etc. (needs wrangler + a local D1)
+cp .env.example .env.local
+pnpm --filter liveround dev
 ```
 
-Apply migrations locally:
+- **Human-press rule** — the server has no reply-publish API. Compose deep-link or clipboard only.
+- **Adapters** — Reddit official API; X uses `MockXAdapter` until `X_CLIENT_ID`/`SECRET` exist.
+- **Credits** — tick only while LIVE, one credit per minute, plan pool then permanent.
+- **Deploy** — Vercel root directory `apps/liveround`. Neon `DATABASE_URL` for persistence.
 
-```powershell
-pnpm db:migrate:local
-```
+Full runbook, env list, and architecture: [`apps/liveround/README.md`](./apps/liveround/README.md).
 
-## Environment variables
-
-See [`.env.example`](.env.example). Secrets (X bearer, Anthropic key, MCP token, Access
-config) are **server-side only** and are never sent to the browser.
-
-## Tests & build
-
-```powershell
-pnpm typecheck   # all workspaces
-pnpm test        # 79 tests (see docs/VERIFICATION.md)
-pnpm --filter @xie/web build
-```
-
-## Deployment
-
-Full, exact steps: [`docs/CLOUDFLARE_SETUP.md`](docs/CLOUDFLARE_SETUP.md). Also see
-[`docs/X_API_SETUP.md`](docs/X_API_SETUP.md), [`docs/CLAUDE_SETUP.md`](docs/CLAUDE_SETUP.md),
-[`docs/MCP_SETUP.md`](docs/MCP_SETUP.md),
-[`docs/ENGAGEMENT_SETUP.md`](docs/ENGAGEMENT_SETUP.md).
-
-## Security
-
-- No scraping — official X and Reddit APIs only.
-- Sending is manual and per-reply: no auto-post, no scheduling, no bulk endpoint exists.
-  Every send takes a UNIQUE idempotency claim before the network call and is audit-logged.
-- OAuth tokens are AES-256-GCM encrypted at rest in D1; ciphertext never leaves the server
-  and token material is never serialized to the browser.
-- All external content (posts, bios, URLs, webhook payloads) is untrusted; rendered as
-  plain text (never `dangerouslySetInnerHTML`); the screening prompt defends against
-  injection.
-- No secret logging; structured JSON logs redact secret-bearing fields.
-- Webhook signatures verified with constant-time HMAC; SSRF-guarded outbound URL checks.
-- Server-side authorization on every sensitive route (Cloudflare Access in production;
-  dev-auth is refused in production).
-
-## Cost controls
-
-Configurable X daily/monthly budgets, Claude daily budget, hard-stop, per-monitor caps,
-`since_id` checkpoints, deterministic prefilter before Claude, and a usage/cost view.
-
-## Known limitations
-
-- X webhook signature protocol must be confirmed against current official X docs before
-  enabling in production (documented in-code).
-- Watchlist CRUD, Miniflare route integration tests, and ESLint config are scaffolded but
-  not exhaustive — see [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md).
-- Optional Vectorize semantic search and R2 raw archiving are feature-flagged off by
-  default; core works without them.
-
-## Troubleshooting
-
-- "X API not configured" / "Claude screening not configured" — the corresponding secret
-  is unset; the app reports the gap instead of failing.
-- Budget-exceeded runs are recorded distinctly from failed / not-due / disabled.
-- `wrangler tail` on each worker to watch cron + queue processing.
+This repo also holds the earlier Cloudflare **X Intelligence Engine** (`apps/api-worker`,
+`apps/web`, `packages/*`). It is not the LiveRound product surface.
