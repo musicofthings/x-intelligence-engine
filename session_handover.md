@@ -1,60 +1,29 @@
 # Session Handover
-_Generated: 2026-08-07T12:25:00Z_
+_Generated: 2026-09-13T09:23:15Z_
 _Branch: main_
-_Trigger: user request (pausing for live testing) | Context at compact: 86%_
-_Compact count this project: 0_
+_Trigger: auto | Context at compact: 93%_
+_Compact count this project: 1_
 
 ---
 
 ## 🎯 Active Task
 **What we're building/fixing:**
-Shipped a Pounce.so-style engagement layer on top of the existing X intelligence
-pipeline (campaigns, engage inbox, AI reply drafting + transforms, deterministic
-pre-send safety checks, X reply sending via OAuth 2.0/PKCE, session/goal tracking),
-plus Reddit as a second collection network. All code is built, tested, committed,
-pushed, and deployed to production. X collection is live and confirmed working.
+unknown
 
-**Phase:** Phase 2 — live testing of the engagement path
-**Next action:** Provision the engagement credentials (X OAuth + token key, Reddit
-app), then run the OAuth connect → draft → send round trip. Nothing in that path
-has ever touched a real X account.
+**Phase:** unknown
+**Next action:** read session_handover.md
 
 ---
 
 ## ✅ Completed This Session
-- [x] Researched pounce.so feature set (site itself is blocked by the local FortiGuard
-      filter; list assembled from indexed copy + BetaList/directory listings)
-- [x] `packages/engage` — pure queue ranking (`engage-rank-v1`) + pre-send safety
-      (`engage-safety-v1`) + Claude reply drafting (`x-intel-reply-v1`)
-- [x] `packages/reddit-client` — official Reddit API, normalized onto `NormalizedXPost`
-- [x] `packages/x-client` — OAuth 2.0 + PKCE (authorize/exchange/refresh/revoke) and
-      `XWriteClient.replyTo`
-- [x] `packages/shared` — AES-256-GCM secret envelope + PKCE helpers
-- [x] `packages/db` — migration `0007_engagement` + `EngagementRepo` (`repo.engage`)
-- [x] `apps/api-worker` — `src/engage-routes.ts` (campaigns, voice, queue, drafts,
-      transforms, safety, send, sessions/stats, X OAuth, Reddit validate/preview)
-- [x] `apps/pipeline-worker` — Reddit dispatcher + collector behind `cron.reddit_enabled`
-- [x] `apps/web` — Engage, Campaigns, Engagement pages + Connected accounts in Settings
-- [x] Fixed the broken global pnpm/wrangler (pnpm store `store/v11` had been wiped,
-      leaving every global package a dangling symlink) — reinstalled both
-- [x] Committed migration 0006, which had been left untracked and never applied remotely
-- [x] Applied migrations 0006 + 0007 to remote D1; verified data intact
-- [x] Deployed both workers; verified the new build executes via `wrangler tail`
-- [x] Fixed pipeline worker running as `APP_ENV=development` in production and closed
-      its open `workers.dev` endpoint (+ 9 config-guard tests)
-- [x] Fixed a latent production bug: an aged-out `since_id` returned 400, was treated as
-      transient, and retried forever with no code path to clear the bad checkpoint
-      (+ 7 regression tests)
-- [x] Enabled `cron.collection_enabled` and `cron.reddit_enabled`; confirmed live
-      collection → prefilter → Claude screening working end to end
+- [ ] (track completed items here)
 
 ---
 
 ## 🔄 In Progress (Exact Resume Point)
 **Branch:** `main`
-**Last commit:** `ecce06b fix(pipeline): self-heal a since_id checkpoint that aged out of X's window`
-**Next immediate action:** Nothing is half-done. Working tree is clean and `origin/main`
-is in sync. Resume by provisioning engagement credentials (see Remaining Work #1).
+**Last commit:** `7271416 feat: add LiveRound, a human-in-the-loop X/Reddit cockpit on Next.js`
+**Next immediate action:** read session_handover.md
 
 ---
 
@@ -82,7 +51,11 @@ is in sync. Resume by provisioning engagement credentials (see Remaining Work #1
 
 ---
 
+---
+
 ## 🏗 Architecture Decisions Made
+| Decision | Rationale | Date |
+|----------|-----------|------|
 | Decision | Rationale | Date |
 |----------|-----------|------|
 | `network` is the platform discriminator, not a new `monitors.type` value | SQLite cannot alter a CHECK constraint, and rebuilding `monitors` would cascade-delete post_monitor_matches / ingestion_runs / alerts. A Reddit monitor is `type='recent_search'`, `network='reddit'`. | 2026-08-07 |
@@ -95,9 +68,29 @@ is in sync. Resume by provisioning engagement credentials (see Remaining Work #1
 
 ---
 
+---
+
 ## 🔧 Commands to Resume
+
+**This exact conversation** (SDK/CLI transcript resume):
 ```bash
-# On any machine after git pull:
+# Same machine AND same directory it started in:
+claude --resume 6ed6c55b-d1d0-4340-a5fb-8685ae92083c
+```
+- Session ID    : `6ed6c55b-d1d0-4340-a5fb-8685ae92083c`
+- Transcript    : `/Users/theranosis_dx/.cursor/projects/Users-theranosis-dx-projects-x-intelligence-engine/agent-transcripts/6ed6c55b-d1d0-4340-a5fb-8685ae92083c/6ed6c55b-d1d0-4340-a5fb-8685ae92083c.jsonl`
+- Bound to cwd  : `/Users/theranosis_dx/projects/x-intelligence-engine`
+- Stored at     : `~/.claude/projects/-Users-theranosis-dx-projects-x-intelligence-engine/6ed6c55b-d1d0-4340-a5fb-8685ae92083c.jsonl`
+
+> ⚠️ Transcript resume is **cwd-bound**. It only works from the same directory
+> on the same machine. If this session started in a git **worktree**, that
+> worktree's path is the cwd — resuming from `main` (or after the worktree is
+> deleted) will silently start a *fresh* session. Per the Agent SDK docs, the
+> robust cross-host / cross-worktree path is **not** transcript resume — it's
+> this handover file: read it into a new session's prompt as application state.
+
+**Project state** (any machine — the robust path):
+```bash
 git pull origin main
 bash scripts/session_sync.sh --load
 
@@ -107,79 +100,47 @@ bash scripts/session_sync.sh --load
 # /token-status       — check context usage
 ```
 
-Verify current state:
-```bash
-pnpm typecheck && pnpm test && pnpm build
-```
-
 ---
 
 ## 📁 Files Modified This Session
 | File | Status |
 |------|--------|
-| packages/engage/** | added (new package) |
-| packages/reddit-client/** | added (new package) |
-| packages/db/migrations/0006_nullable_run_monitor.sql | added (was untracked) |
-| packages/db/migrations/0007_engagement.sql | added |
-| packages/db/src/engagement.ts | added |
-| packages/db/test/engagement.test.ts | added |
-| packages/shared/src/crypto.ts + crypto.test.ts | added |
-| packages/x-client/src/oauth.ts, write.ts, oauth.test.ts | added |
-| packages/x-client/src/ratelimit.ts | modified (isStaleSinceIdError) |
-| packages/db/src/repositories.ts, rows.ts, index.ts | modified |
-| packages/shared/src/domain.ts, errors.ts, index.ts | modified |
-| packages/config/src/env.ts | modified |
-| apps/api-worker/src/engage-routes.ts | added |
-| apps/api-worker/src/routes.ts, bindings.ts, wrangler.jsonc | modified |
-| apps/pipeline-worker/src/pipeline.ts, index.ts, bindings.ts, wrangler.jsonc | modified |
-| apps/pipeline-worker/test/wrangler-config.test.ts | added |
-| apps/pipeline-worker/test/stale-checkpoint.test.ts | added |
-| apps/web/src/pages/Engage.tsx, Campaigns.tsx | added |
-| apps/web/src/pages/Misc.tsx, App.tsx, components/Layout.tsx, lib/types.ts | modified |
-| docs/ENGAGEMENT_SETUP.md | added |
-| README.md, AGENTS.md, .env.example, docs/BUILD_STATUS.md, docs/VERIFICATION.md | modified |
+| `.env.example` | modified |
+| `.gitignore` | modified |
+| `AGENTS.md` | modified |
+| `README.md` | modified |
+| `apps/liveround/.env.example` | modified |
+| `apps/liveround/.gitignore` | modified |
+| `apps/liveround/README.md` | modified |
+| `apps/liveround/drizzle/0001_init.sql` | modified |
+| `apps/liveround/next.config.ts` | modified |
+| `apps/liveround/package.json` | modified |
+| `apps/liveround/public/favicon.svg` | modified |
+| `apps/liveround/src/app/api/campaigns/route.ts` | modified |
+| `apps/liveround/src/app/api/cards/[id]/route.ts` | modified |
+| `apps/liveround/src/app/api/health/route.ts` | modified |
+| `apps/liveround/src/app/api/log/route.ts` | modified |
+| _(+37 more files not shown)_ | — |
 
 ---
 
 ## 🌿 Git Context
 ```
 Branch  : main
-Commit  : ecce06b fix(pipeline): self-heal a since_id checkpoint that aged out of X's window
-Status  : clean (only untracked context-kit artifacts: .claude/, api_docs.md, session_handover.md)
-Remote  : in sync with origin/main (0 ahead, 0 behind)
+Commit  : 7271416 feat: add LiveRound, a human-in-the-loop X/Reddit cockpit on Next.js
+Status  : M apps/liveround/package.json
+ M pnpm-lock.yaml
+?? session_handover.md.lock
 ```
 
 Recent commits:
 ```
+7271416 feat: add LiveRound, a human-in-the-loop X/Reddit cockpit on Next.js
+5c849c4 chore: track session handover state, ignore context-kit local telemetry
 ecce06b fix(pipeline): self-heal a since_id checkpoint that aged out of X's window
 b61437c fix(pipeline): run as production, close the open workers.dev endpoint
 fe550d5 feat(engage): campaigns, AI reply drafting, pre-send safety, X sending, Reddit
-d2141ca fix(db): track migration 0006 (nullable ingestion_runs.monitor_id)
-672c25d feat: watchlist-driven collection, cron on/off switches (collection off by default), x.com MCP docs
 ```
-
----
-
-## 🚀 Production State (as of 2026-08-07T12:25Z)
-```
-xie-api       930aaf77-c715-4a2f-ac09-b55065197f33  (100%)
-xie-pipeline  e3fad789-7d56-4a0f-a166-b35730a108b7  (100%)
-D1 xie-db     migrations 0006 + 0007 applied
-Tests         235 passing across 15 files; typecheck clean; build clean
-```
-
-Live pipeline verified: 2 ingestion runs succeeded, 0 failed; posts 78 → 128;
-screenings 23 → 27; 0 alerts. Both X monitors on a 60-minute cadence, 25 results
-per run — well inside the 5000/day X and 500/day Claude budgets.
-
-**D1 rollback point (pre-0007):**
-```bash
-wrangler d1 time-travel restore xie-db --bookmark=00000bad-00000000-000050c0-6c6e793cdb9b1b77427f237ade5d4274
-```
-
-**Cron switches:** `cron.collection_enabled=true`, `cron.reddit_enabled=true`
-(Reddit inert until credentials + at least one Reddit monitor exist),
-`cron.digest_enabled=true`, `cron.maintenance_enabled=true`.
 
 ---
 
@@ -192,6 +153,8 @@ wrangler d1 time-travel restore xie-db --bookmark=00000bad-00000000-000050c0-6c6
   X account
 - If `pnpm` or `wrangler` suddenly fail with MODULE_NOT_FOUND, the pnpm store was wiped:
   reinstall globally rather than debugging the repo
+
+---
 
 ---
 
