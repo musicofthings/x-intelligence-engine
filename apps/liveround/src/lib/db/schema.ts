@@ -19,6 +19,11 @@ export const users = pgTable("users", {
   planCredits: integer("plan_credits").notNull().default(0),
   permanentCredits: integer("permanent_credits").notNull().default(0),
   onboardingComplete: boolean("onboarding_complete").notNull().default(false),
+  billingPaused: boolean("billing_paused").notNull().default(false),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  planPeriodEnd: timestamp("plan_period_end", { withTimezone: true }),
+  lastRecapOn: text("last_recap_on"),
 });
 
 export const socialAccounts = pgTable("social_accounts", {
@@ -48,6 +53,7 @@ export const campaigns = pgTable("campaigns", {
   filterDoc: text("filter_doc").notNull().default(""),
   searchRules: jsonb("search_rules").notNull().default([]),
   subreddits: jsonb("subreddits").notNull().default([]),
+  minFollowers: integer("min_followers").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });
@@ -132,3 +138,48 @@ export const magicTokens = pgTable("magic_tokens", {
   email: text("email").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+export const oauthStates = pgTable("oauth_states", {
+  state: text("state").primaryKey(),
+  userId: text("user_id").notNull(),
+  provider: text("provider").notNull(),
+  codeVerifier: text("code_verifier").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+export const postIdeas = pgTable("post_ideas", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  sessionId: text("session_id").notNull(),
+  text: text("text").notNull(),
+  status: text("status").notNull().default("draft"),
+  failReason: text("fail_reason"),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+  externalPostId: text("external_post_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+export const postingSettings = pgTable("posting_settings", {
+  userId: text("user_id").primaryKey().references(() => users.id),
+  postsPerDay: integer("posts_per_day").notNull().default(3),
+  windowStart: text("window_start").notNull().default("09:00"),
+  windowEnd: text("window_end").notNull().default("17:00"),
+  timezone: text("timezone").notNull().default("America/New_York"),
+});
+
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    network: text("network").notNull(),
+    handle: text("handle").notNull(),
+    score: integer("score").notNull().default(0),
+    ourReplies: integer("our_replies").notNull().default(0),
+    theirReplies: integer("their_replies").notNull().default(0),
+    lastAt: timestamp("last_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [uniqueIndex("contacts_user_network_handle").on(table.userId, table.network, table.handle)],
+);

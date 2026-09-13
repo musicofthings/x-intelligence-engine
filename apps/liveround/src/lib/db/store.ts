@@ -30,6 +30,7 @@ interface Memory {
   intervals: Set<string>;
   magic: Map<string, { email: string; expiresAt: number }>;
   seenPosts: Set<string>;
+  tokens: Map<string, string>;
 }
 
 const g = globalThis as typeof globalThis & { __liveroundMem?: Memory };
@@ -50,9 +51,12 @@ function mem(): Memory {
       intervals: new Set(),
       magic: new Map(),
       seenPosts: new Set(),
+      tokens: new Map(),
     };
   }
-  return g.__liveroundMem;
+  const m = g.__liveroundMem;
+  if (!m.tokens) m.tokens = new Map();
+  return m;
 }
 
 const defaultVoice: VoiceProfile = {
@@ -82,6 +86,11 @@ export async function ensureUser(email: string, name?: string | null): Promise<U
     planCredits: TRIAL_GRANT,
     permanentCredits: 0,
     onboardingComplete: false,
+    billingPaused: false,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    planPeriodEnd: null,
+    lastRecapOn: null,
   };
   await saveUser(user);
   const account: SocialAccount = {
@@ -128,6 +137,11 @@ export async function saveUser(user: UserRecord): Promise<void> {
         planCredits: user.planCredits,
         permanentCredits: user.permanentCredits,
         onboardingComplete: user.onboardingComplete,
+        billingPaused: user.billingPaused,
+        stripeCustomerId: user.stripeCustomerId,
+        stripeSubscriptionId: user.stripeSubscriptionId,
+        planPeriodEnd: user.planPeriodEnd ? new Date(user.planPeriodEnd) : null,
+        lastRecapOn: user.lastRecapOn,
       })
       .onConflictDoUpdate({
         target: t.users.id,
@@ -137,6 +151,11 @@ export async function saveUser(user: UserRecord): Promise<void> {
           planCredits: user.planCredits,
           permanentCredits: user.permanentCredits,
           onboardingComplete: user.onboardingComplete,
+          billingPaused: user.billingPaused,
+          stripeCustomerId: user.stripeCustomerId,
+          stripeSubscriptionId: user.stripeSubscriptionId,
+          planPeriodEnd: user.planPeriodEnd ? new Date(user.planPeriodEnd) : null,
+          lastRecapOn: user.lastRecapOn,
         },
       });
     return;
@@ -167,6 +186,12 @@ export async function getUserByEmail(email: string): Promise<UserRecord | null> 
   return id ? (mem().users.get(id) ?? null) : null;
 }
 
+export async function getUserByStripeCustomer(customerId: string): Promise<UserRecord | null> {
+  if (!customerId) return null;
+  const all = await listAllUsers();
+  return all.find((u) => u.stripeCustomerId === customerId) ?? null;
+}
+
 function rowToUser(row: typeof t.users.$inferSelect): UserRecord {
   return {
     id: row.id,
@@ -179,6 +204,11 @@ function rowToUser(row: typeof t.users.$inferSelect): UserRecord {
     planCredits: row.planCredits,
     permanentCredits: row.permanentCredits,
     onboardingComplete: row.onboardingComplete,
+    billingPaused: row.billingPaused,
+    stripeCustomerId: row.stripeCustomerId,
+    stripeSubscriptionId: row.stripeSubscriptionId,
+    planPeriodEnd: iso(row.planPeriodEnd),
+    lastRecapOn: row.lastRecapOn,
   };
 }
 
@@ -298,6 +328,7 @@ export async function saveCampaign(campaign: Campaign): Promise<void> {
           filterDoc: campaign.filterDoc,
           searchRules: campaign.searchRules,
           subreddits: campaign.subreddits,
+          minFollowers: campaign.minFollowers,
           updatedAt: new Date(campaign.updatedAt),
         },
       });
@@ -306,17 +337,30 @@ export async function saveCampaign(campaign: Campaign): Promise<void> {
   mem().campaigns.set(campaign.id, campaign);
 }
 
+function rowToCampaign(row: typeof t.campaigns.$inferSelect): Campaign {
+  return {
+    id: row.id,
+    userId: row.userId,
+    name: row.name,
+    actingAccountId: row.actingAccountId,
+    building: row.building,
+    reaching: row.reaching,
+    strategyX: row.strategyX,
+    strategyReddit: row.strategyReddit,
+    filterDoc: row.filterDoc,
+    searchRules: row.searchRules as Campaign["searchRules"],
+    subreddits: row.subreddits as Campaign["subreddits"],
+    minFollowers: row.minFollowers ?? 0,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 export async function listCampaigns(userId: string): Promise<Campaign[]> {
   const db = getDb();
   if (db) {
     const rows = await db.select().from(t.campaigns).where(eq(t.campaigns.userId, userId));
-    return rows.map((row) => ({
-      ...row,
-      searchRules: row.searchRules as Campaign["searchRules"],
-      subreddits: row.subreddits as Campaign["subreddits"],
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    }));
+    return rows.map(rowToCampaign);
   }
   return [...mem().campaigns.values()].filter((c) => c.userId === userId);
 }
@@ -327,13 +371,7 @@ export async function getCampaign(id: string): Promise<Campaign | null> {
     const rows = await db.select().from(t.campaigns).where(eq(t.campaigns.id, id)).limit(1);
     const row = rows[0];
     if (!row) return null;
-    return {
-      ...row,
-      searchRules: row.searchRules as Campaign["searchRules"],
-      subreddits: row.subreddits as Campaign["subreddits"],
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    };
+    return rowToCampaign(row);
   }
   return mem().campaigns.get(id) ?? null;
 }
@@ -603,4 +641,47 @@ export async function consumeMagic(token: string): Promise<string | null> {
   if (!row || row.expiresAt < Date.now()) return null;
   mem().magic.delete(token);
   return row.email;
+}
+
+export async function listAllUsers(): Promise<UserRecord[]> {
+  const db = getDb();
+  if (db) {
+    const rows = await db.select().from(t.users);
+    return rows.map(rowToUser);
+  }
+  return [...mem().users.values()];
+}
+
+export async function getAccountTokenEnvelope(accountId: string): Promise<string | null> {
+  const db = getDb();
+  if (db) {
+    const rows = await db.select().from(t.socialAccounts).where(eq(t.socialAccounts.id, accountId)).limit(1);
+    return rows[0]?.oauthEncrypted ?? null;
+  }
+  return mem().tokens.get(accountId) ?? null;
+}
+
+export async function setAccountTokenEnvelope(
+  accountId: string,
+  envelope: string | null,
+  expiresAt: string | null,
+): Promise<void> {
+  const db = getDb();
+  if (db) {
+    await db
+      .update(t.socialAccounts)
+      .set({
+        oauthEncrypted: envelope,
+        tokenExpiresAt: expiresAt ? new Date(expiresAt) : null,
+      })
+      .where(eq(t.socialAccounts.id, accountId));
+    return;
+  }
+  if (envelope) mem().tokens.set(accountId, envelope);
+  else mem().tokens.delete(accountId);
+  const account = mem().accounts.get(accountId);
+  if (account) {
+    account.tokenExpiresAt = expiresAt;
+    mem().accounts.set(accountId, account);
+  }
 }

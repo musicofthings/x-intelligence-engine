@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
-import type { SearchRule, SocialPost, SubredditRef } from "@/lib/types";
+import type { SearchRule, SocialPost, SubredditRef, VolumeReport } from "@/lib/types";
 
 export function OnboardingWizard() {
   const router = useRouter();
@@ -18,6 +18,8 @@ export function OnboardingWizard() {
   const [rules, setRules] = useState<SearchRule[]>([]);
   const [subs, setSubs] = useState<SubredditRef[]>([]);
   const [subInput, setSubInput] = useState("");
+  const [minFollowers, setMinFollowers] = useState(0);
+  const [volumes, setVolumes] = useState<Record<string, VolumeReport>>({});
   const [preview, setPreview] = useState<SocialPost[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +44,9 @@ export function OnboardingWizard() {
     setRules(data.campaign.searchRules);
     setSubs(data.campaign.subreddits);
     setPreview(data.preview ?? []);
+    for (const rule of data.campaign.searchRules as SearchRule[]) {
+      void checkVolume(rule.query);
+    }
     setStep(2);
   }
 
@@ -58,6 +63,7 @@ export function OnboardingWizard() {
         strategyReddit,
         searchRules: rules,
         subreddits: subs,
+        minFollowers,
         previewNetworks: ["x", "reddit"],
       }),
     });
@@ -75,6 +81,16 @@ export function OnboardingWizard() {
     await fetch("/api/onboarding/complete", { method: "POST" });
     router.push("/app/session");
     router.refresh();
+  }
+
+  async function checkVolume(query: string) {
+    const res = await fetch("/api/rules/volume", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const data = (await res.json()) as VolumeReport;
+    setVolumes((v) => ({ ...v, [query]: data }));
   }
 
   async function addSub() {
@@ -136,7 +152,10 @@ export function OnboardingWizard() {
               if (e.key === "Enter") {
                 e.preventDefault();
                 const q = e.currentTarget.value.trim();
-                if (q) setRules((r) => [...r, { query: q, source: "manual" }]);
+                if (q) {
+                  setRules((r) => [...r, { query: q, source: "manual" }]);
+                  void checkVolume(q);
+                }
                 e.currentTarget.value = "";
               }
             }}
@@ -144,13 +163,30 @@ export function OnboardingWizard() {
           <ul className="text-sm text-muted">
             {rules.map((r) => (
               <li key={r.query} className="flex justify-between gap-2 py-1">
-                {r.query}
+                <span>
+                  {r.query}
+                  {volumes[r.query] ? (
+                    <span className={volumes[r.query]!.retryable ? " text-pause" : " text-faint"}>
+                      {" "}
+                      — {volumes[r.query]!.message}
+                    </span>
+                  ) : null}
+                </span>
                 <button type="button" onClick={() => setRules((x) => x.filter((i) => i.query !== r.query))}>
                   Remove
                 </button>
               </li>
             ))}
           </ul>
+          <Label htmlFor="minf">Min X followers (optional cutoff)</Label>
+          <Input
+            id="minf"
+            type="number"
+            min={0}
+            value={minFollowers || ""}
+            placeholder="0 — off"
+            onChange={(e) => setMinFollowers(Math.max(0, Number(e.target.value) || 0))}
+          />
           <Label>Subreddits</Label>
           <div className="flex gap-2">
             <Input value={subInput} onChange={(e) => setSubInput(e.target.value)} placeholder="startups" />

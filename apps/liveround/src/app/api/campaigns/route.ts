@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       filterDoc: body.filterDoc ?? generated?.filterDoc ?? "",
       searchRules: body.searchRules ?? generated?.searchRules ?? [],
       subreddits: body.subreddits ?? generated?.subreddits ?? [],
+      minFollowers: typeof body.minFollowers === "number" ? Math.max(0, Math.round(body.minFollowers)) : 0,
       createdAt: body.createdAt ?? nowIso(),
       updatedAt: nowIso(),
     };

@@ -1,5 +1,33 @@
 # Build Status
 
+_Last updated: 2026-09-13_
+
+This file is kept honest: it reflects what is actually implemented and verified, not
+what is planned.
+
+## LiveRound (`apps/liveround`) — Phase 2 in tree
+
+Human-in-the-loop growth cockpit on Next.js / Vercel / Neon. Phase 0–1 session loop plus Phase 2 surfaces below.
+
+**Implemented in source (unit-tested, not live-verified against X/Stripe/Resend):**
+
+- X OAuth 2.0 + PKCE, AES-GCM token envelope, production recent-search adapter behind `SocialAdapter`. Mock adapter remains the default when keys are missing.
+- Search-rule volume (quiet / ok / noisy) + campaign `minFollowers` cutoff.
+- Post Ideas distill / approve / posting window / cron publisher. Publisher payload is `{ text }` only — replies stay client-side.
+- Stripe catalog (Scout $39/$384, Hunter $69/$684, Apex $149/$1,488, packs $9–$199). Checkout and webhooks are wired; they no-op until `STRIPE_SECRET_KEY` is set.
+- Contacts scored only when inbound evidence exists in the last 30 days.
+- Morning recap + missed-queue email copy; sent only if `RESEND_API_KEY` is set.
+
+**Not claimed:** production X OAuth round-trip, a live original post, a Stripe charge, or a sent recap email. Local demo still uses the in-memory store unless `DATABASE_URL` is set.
+
+**Verified locally in Phase 1:** magic-link sign-in, LIVE heartbeat credit tick, pause does not tick, compose-intent send + confirm log. Phase 2 unit tests cover crypto, PKCE URL, volume bands, original-post payload, scheduler, contacts reciprocity, catalog prices, recap subjects.
+
+Apply `apps/liveround/drizzle/0002_phase2.sql` on Neon when using Postgres.
+
+---
+
+## Legacy X Intelligence Engine (Cloudflare)
+
 _Last updated: 2026-07-07_
 
 This file is kept honest: it reflects what is actually implemented and verified, not

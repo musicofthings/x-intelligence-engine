@@ -3,6 +3,7 @@ import { shouldHardStop, shouldIdlePause } from "./clock";
 import { adapterFor } from "@/lib/adapters";
 import { generateDraft } from "@/lib/ai/draft";
 import { SCORE_THRESHOLD, rankCards, scorePost } from "@/lib/ai/score";
+import { startBlockedReason } from "@/lib/billing/catalog";
 import { balanceOf, canStart, tickLiveMinute } from "@/lib/credits";
 import {
   activeSessionForUser,
@@ -22,7 +23,10 @@ import {
   saveSession,
   wasSeen,
 } from "@/lib/db/store";
-import { anthropicConfigured, redditConfigured, xConfigured } from "@/lib/env";
+import { distillPostIdeas } from "@/lib/ideas/distill";
+import { anthropicConfigured, redditConfigured, stripeConfigured, xConfigured } from "@/lib/env";
+import { trialExpired } from "@/lib/billing/catalog";
+import { resolveXSearchToken } from "@/lib/x/tokens";
 import { newId, nowIso } from "@/lib/utils";
 
 export { shouldHardStop, shouldIdlePause } from "./clock";
@@ -46,6 +50,10 @@ export async function snapshotFor(userId: string): Promise<SessionSnapshot> {
     xConfigured: xConfigured(),
     redditConfigured: redditConfigured(),
     anthropicConfigured: anthropicConfigured(),
+    stripeConfigured: stripeConfigured(),
+    billingPaused: user.billingPaused,
+    trialExpired: trialExpired(user),
+    plan: user.plan,
   };
 }
 
@@ -56,6 +64,8 @@ export async function startRound(input: {
 }): Promise<SessionSnapshot> {
   const user = await getUserById(input.userId);
   if (!user) throw new Error("Unknown user");
+  const blocked = startBlockedReason(user);
+  if (blocked) throw new Error(blocked);
   if (!canStart(user)) throw new Error("Need a few credits to start a round.");
   const campaign = await getCampaign(input.campaignId);
   if (!campaign || campaign.userId !== input.userId) throw new Error("Campaign not found");
@@ -111,6 +121,8 @@ export async function pauseRound(userId: string, reason: "idle" | "credits" | "u
 export async function resumeRound(userId: string): Promise<SessionSnapshot> {
   const user = await getUserById(userId);
   if (!user) throw new Error("Unknown user");
+  const blocked = startBlockedReason(user);
+  if (blocked) throw new Error(blocked);
   if (balanceOf(user).total <= 0) return pauseRound(userId, "credits");
   const session = await activeSessionForUser(userId);
   if (!session || session.state === "stopped") throw new Error("No round to resume");
@@ -131,6 +143,19 @@ export async function stopRound(userId: string): Promise<SessionSnapshot> {
   if (acting && acting.activeSessionId === session.id) {
     acting.activeSessionId = null;
     await saveAccount(acting);
+  }
+  const logs = await listLogs(userId);
+  const writing = await getWriting(userId);
+  try {
+    await distillPostIdeas({
+      userId,
+      sessionId: session.id,
+      replies: logs,
+      voice: acting?.voiceProfile ?? { bio: writing.bio, writingNotes: writing.writingNotes, replyLength: writing.replyLength, samplePosts: [] },
+      writing,
+    });
+  } catch {
+    /* distillation is best-effort */
   }
   return snapshotFor(userId);
 }
@@ -180,16 +205,27 @@ async function scanAndOffer(session: RoundSession, campaign: Campaign): Promise<
   const logs = await listLogs(session.userId);
   const writing = await getWriting(session.userId);
   const acting = await getAccount(session.actingAccountId);
+  const accessToken = await resolveXSearchToken(session.userId, session.actingAccountId);
   const discovered: SocialPost[] = [];
   for (const network of session.networks) {
     const adapter = adapterFor(network);
-    discovered.push(...(await adapter.discover({ campaign, sinceIso: since, limit: 12 })));
+    try {
+      discovered.push(...(await adapter.discover({ campaign, sinceIso: since, limit: 12, accessToken })));
+    } catch {
+      continue;
+    }
   }
   const known = new Set(existing.map((c) => c.post.id));
   const ranked = discovered
     .filter((p) => !known.has(p.id))
     .filter((p) => !wasSeen(session.userId, p.id))
-    .filter((p) => new Date(p.createdAt).getTime() >= Date.now() - FRESHNESS_MS);
+    .filter((p) => new Date(p.createdAt).getTime() >= Date.now() - FRESHNESS_MS)
+    .filter(
+      (p) =>
+        !campaign.minFollowers ||
+        p.network !== "x" ||
+        (p.authorFollowers ?? 0) >= campaign.minFollowers,
+    );
   const scored: { post: SocialPost; score: ReturnType<typeof scorePost> }[] = [];
   for (const post of ranked) {
     if (await isBlocked(session.userId, post.network, post.authorHandle)) continue;
@@ -231,9 +267,22 @@ async function scanAndOffer(session: RoundSession, campaign: Campaign): Promise<
 
 export async function previewPosts(campaign: Campaign, networks: Network[]): Promise<SocialPost[]> {
   const since = new Date(Date.now() - FRESHNESS_MS).toISOString();
+  const accessToken = await resolveXSearchToken(campaign.userId, campaign.actingAccountId);
   const out: SocialPost[] = [];
   for (const network of networks) {
-    out.push(...(await adapterFor(network).discover({ campaign, sinceIso: since, limit: 4 })));
+    try {
+      out.push(...(await adapterFor(network).discover({ campaign, sinceIso: since, limit: 4, accessToken })));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Discovery failed";
+      throw new Error(message);
+    }
   }
-  return out.slice(0, 4);
+  return out
+    .filter(
+      (p) =>
+        !campaign.minFollowers ||
+        p.network !== "x" ||
+        (p.authorFollowers ?? 0) >= campaign.minFollowers,
+    )
+    .slice(0, 4);
 }

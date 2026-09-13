@@ -32,14 +32,29 @@ export const env = {
   redditRedirect: optional("REDDIT_REDIRECT_URI"),
   xClientId: optional("X_CLIENT_ID"),
   xClientSecret: optional("X_CLIENT_SECRET"),
+  xBearer: optional("X_BEARER_TOKEN"),
+  xRedirect: optional("X_OAUTH_REDIRECT_URI"),
   googleClientId: optional("GOOGLE_CLIENT_ID"),
   googleClientSecret: optional("GOOGLE_CLIENT_SECRET"),
   resendKey: optional("RESEND_API_KEY"),
   resendFrom: optional("EMAIL_FROM") ?? "LiveRound <noreply@localhost>",
   stripeSecret: optional("STRIPE_SECRET_KEY"),
   stripeWebhook: optional("STRIPE_WEBHOOK_SECRET"),
+  stripePrices: {
+    scoutMonth: optional("STRIPE_PRICE_SCOUT_MONTH"),
+    scoutYear: optional("STRIPE_PRICE_SCOUT_YEAR"),
+    hunterMonth: optional("STRIPE_PRICE_HUNTER_MONTH"),
+    hunterYear: optional("STRIPE_PRICE_HUNTER_YEAR"),
+    apexMonth: optional("STRIPE_PRICE_APEX_MONTH"),
+    apexYear: optional("STRIPE_PRICE_APEX_YEAR"),
+    pack50: optional("STRIPE_PRICE_PACK_50"),
+    pack200: optional("STRIPE_PRICE_PACK_200"),
+    pack500: optional("STRIPE_PRICE_PACK_500"),
+    pack1800: optional("STRIPE_PRICE_PACK_1800"),
+  },
   sentryDsn: optional("SENTRY_DSN"),
   tokenKey: optional("TOKEN_ENCRYPTION_KEY"),
+  cronSecret: optional("CRON_SECRET"),
   allowDevLogin: bool("AUTH_DEV_LOGIN") || (process.env.NODE_ENV !== "production"),
 };
 
@@ -53,4 +68,26 @@ export function xConfigured(): boolean {
 
 export function anthropicConfigured(): boolean {
   return Boolean(env.anthropicKey);
+}
+
+export function stripeConfigured(): boolean {
+  return Boolean(env.stripeSecret);
+}
+
+export function xSearchConfigured(): boolean {
+  return xConfigured() || Boolean(env.xBearer);
+}
+
+export function xRedirectUri(): string {
+  return env.xRedirect ?? `${appUrl()}/api/oauth/x/callback`;
+}
+
+export function cronAuthorized(req: Request): boolean {
+  const vercel = req.headers.get("x-vercel-cron");
+  if (vercel === "1") return true;
+  const secret = env.cronSecret;
+  const auth = req.headers.get("authorization");
+  if (secret && auth === `Bearer ${secret}`) return true;
+  if (!secret && env.nodeEnv !== "production") return true;
+  return false;
 }

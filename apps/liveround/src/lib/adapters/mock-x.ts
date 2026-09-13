@@ -107,6 +107,7 @@ export class MockXAdapter implements SocialAdapter {
         body: row.body,
         createdAt: new Date(created).toISOString(),
         conversationId: id,
+        authorFollowers: 80 + (hash(author.handle) % 12_000),
         metrics: {
           likes: row.likes,
           replies: row.replies,
@@ -122,3 +123,8 @@ export class MockXAdapter implements SocialAdapter {
 }
 
 export const mockXAdapter = new MockXAdapter();
+
+/** Local volume estimate from the mock corpus — not production X. */
+export function countMockMatches(query: string): number {
+  return CORPUS.filter((row) => matchesRules(row.body, [query])).length;
+}

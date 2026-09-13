@@ -215,7 +215,24 @@ export function SessionCockpit({
           <p className="text-sm text-pause">X API keys are not set. The mock adapter is on — this is not production X.</p>
         ) : null}
         <p className="tabular text-sm text-muted">{snap.credits.total} credits · plan {snap.credits.plan} · permanent {snap.credits.permanent}</p>
-        <Button variant="paper" onClick={onStart} disabled={snap.credits.total < 3 || networks.length === 0}>
+        {snap.billingPaused ? (
+          <p className="text-sm text-pause">
+            Billing is paused after a failed payment.{" "}
+            <Link href="/app/settings" className="underline">
+              Update billing
+            </Link>
+          </p>
+        ) : null}
+        {snap.trialExpired ? (
+          <p className="text-sm text-pause">
+            The trial has ended.{" "}
+            <Link href="/app/settings" className="underline">
+              Pick a plan
+            </Link>{" "}
+            to keep running rounds.
+          </p>
+        ) : null}
+        <Button variant="paper" onClick={onStart} disabled={snap.credits.total < 3 || networks.length === 0 || snap.billingPaused || snap.trialExpired}>
           Start
         </Button>
       </div>

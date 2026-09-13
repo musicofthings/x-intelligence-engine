@@ -14,6 +14,7 @@ const campaign: Campaign = {
   filterDoc: "dream post: someone asking how to join live conversations",
   searchRules: [{ query: "live conversations", source: "generated" }],
   subreddits: [],
+  minFollowers: 0,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -29,5 +30,6 @@ describe("mock X adapter", () => {
     expect(posts.every((p) => p.network === "x")).toBe(true);
     expect("reply" in mockXAdapter).toBe(false);
     expect("publish" in mockXAdapter).toBe(false);
+    expect(posts.every((p) => typeof p.authorFollowers === "number")).toBe(true);
   });
 });

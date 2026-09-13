@@ -1,4 +1,8 @@
 {
   "framework": "nextjs",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "crons": [
+    { "path": "/api/cron/post-ideas", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/recap", "schedule": "0 12 * * *" }
+  ]
 }

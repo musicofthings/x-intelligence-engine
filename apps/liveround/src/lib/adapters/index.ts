@@ -1,6 +1,7 @@
-import { env, redditConfigured } from "@/lib/env";
+import { env, redditConfigured, xSearchConfigured } from "@/lib/env";
 import type { AdapterDiscoverInput, SocialAdapter, SocialPost, SubredditRef } from "@/lib/types";
 import { mockXAdapter } from "./mock-x";
+import { productionXAdapter } from "./x";
 
 const TOKEN_URL = "https://www.reddit.com/api/v1/access_token";
 const API_BASE = "https://oauth.reddit.com";
@@ -210,9 +211,10 @@ export const redditAdapter = new RedditAdapter();
 
 export function adapterFor(network: "x" | "reddit"): SocialAdapter {
   if (network === "reddit") return redditAdapter;
+  if (xSearchConfigured()) return productionXAdapter;
   return mockXAdapter;
 }
 
 export function listAdapters(): SocialAdapter[] {
-  return [mockXAdapter, redditAdapter];
+  return [adapterFor("x"), redditAdapter];
 }

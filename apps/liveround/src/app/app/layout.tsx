@@ -8,6 +8,8 @@ import { redirect } from "next/navigation";
 const NAV = [
   { href: "/app/session", label: "Session" },
   { href: "/app/campaigns", label: "Campaigns" },
+  { href: "/app/ideas", label: "Ideas" },
+  { href: "/app/contacts", label: "Contacts" },
   { href: "/app/log", label: "Log" },
   { href: "/app/stats", label: "Stats" },
   { href: "/app/settings", label: "Settings" },

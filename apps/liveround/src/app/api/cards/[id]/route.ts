@@ -100,7 +100,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         sessionId: card.sessionId,
         cardId: card.id,
         network: card.post.network,
-        externalPostId: card.post.id,
+        externalPostId: `${card.post.authorHandle}:${card.post.id}`,
         body: draft,
         confirmedAt: nowIso(),
       });

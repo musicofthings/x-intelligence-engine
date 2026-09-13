@@ -45,15 +45,24 @@ describe("human-press send path", () => {
     const root = join(__dirname, "../..");
     const files = walk(root);
     const banned = [
-      /api\.x\.com\/2\/tweets/,
-      /oauth\.reddit\.com\/api\/comment/,
+      /in_reply_to_tweet_id/,
       /replyTo\s*\(/,
       /XWriteClient/,
+      /oauth\.reddit\.com\/api\/comment/,
     ];
     const hits: string[] = [];
     for (const file of files) {
       if (file.endsWith(".test.ts")) continue;
       const src = readFileSync(file, "utf8");
+      if (file.includes("ideas/publish.ts")) {
+        if (/in_reply_to/.test(src) || /\breply\s*:/.test(src)) {
+          hits.push(`${file} :: reply target on original-post publisher`);
+        }
+        continue;
+      }
+      if (/api\.x\.com\/2\/tweets/.test(src) && !file.includes("ideas/publish.ts")) {
+        hits.push(`${file} :: api.x.com/2/tweets is only allowed in lib/ideas/publish.ts`);
+      }
       for (const re of banned) {
         if (re.test(src)) hits.push(`${file} :: ${re}`);
       }

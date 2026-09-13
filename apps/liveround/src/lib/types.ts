@@ -11,6 +11,59 @@ export type CreditPool = "plan" | "permanent";
 
 export type CreditReason = "session_live_tick" | "trial_grant" | "pack" | "plan_reset" | "adjustment";
 
+export type PostIdeaStatus = "draft" | "approved" | "queued" | "posted" | "failed" | "expired";
+
+export type VolumeBand = "quiet" | "ok" | "noisy";
+
+export interface VolumeReport {
+  query: string;
+  count24h: number;
+  band: VolumeBand;
+  message: string;
+  retryable: boolean;
+}
+
+export interface PostIdea {
+  id: string;
+  userId: string;
+  sessionId: string;
+  text: string;
+  status: PostIdeaStatus;
+  failReason: string | null;
+  scheduledAt: string | null;
+  postedAt: string | null;
+  externalPostId: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface PostingSettings {
+  userId: string;
+  postsPerDay: number;
+  windowStart: string;
+  windowEnd: string;
+  timezone: string;
+}
+
+export interface Contact {
+  id: string;
+  userId: string;
+  network: Network;
+  handle: string;
+  score: number;
+  ourReplies: number;
+  theirReplies: number;
+  lastAt: string;
+}
+
+export interface XTokenSet {
+  accessToken: string;
+  refreshToken: string | null;
+  scope: string | null;
+  expiresAt: string | null;
+  tokenType: string;
+}
+
 export interface SocialMetrics {
   likes: number;
   replies: number;
@@ -38,6 +91,7 @@ export interface SocialPost {
   conversationId: string;
   metrics: SocialMetrics;
   media: SocialMedia[];
+  authorFollowers?: number;
   /** Reddit thread targets the user can switch between. */
   replyTargets?: ReplyTarget[];
 }
@@ -100,6 +154,8 @@ export interface Campaign {
   filterDoc: string;
   searchRules: SearchRule[];
   subreddits: SubredditRef[];
+  /** 0 means no cutoff. Applied to X discovery only. */
+  minFollowers: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -200,6 +256,11 @@ export interface UserRecord {
   planCredits: number;
   permanentCredits: number;
   onboardingComplete: boolean;
+  billingPaused: boolean;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  planPeriodEnd: string | null;
+  lastRecapOn: string | null;
 }
 
 export interface CreditBalance {
@@ -218,12 +279,17 @@ export interface SessionSnapshot {
   xConfigured: boolean;
   redditConfigured: boolean;
   anthropicConfigured: boolean;
+  stripeConfigured: boolean;
+  billingPaused: boolean;
+  trialExpired: boolean;
+  plan: PlanId;
 }
 
 export interface AdapterDiscoverInput {
   campaign: Campaign;
   sinceIso: string;
   limit: number;
+  accessToken?: string;
 }
 
 export interface SocialAdapter {
@@ -244,3 +310,8 @@ export const TRIAL_GRANT = 50;
 export const TRIAL_DAYS = 7;
 export const X_CHAR_LIMIT = 280;
 export const REDDIT_CHAR_LIMIT = 10_000;
+export const IDEA_EXPIRE_DAYS = 14;
+export const IDEA_DISTILL_MIN_REPLIES = 12;
+export const CONTACT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+export const VOLUME_QUIET_MAX = 4;
+export const VOLUME_NOISY_MIN = 80;

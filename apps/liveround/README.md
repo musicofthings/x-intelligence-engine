@@ -14,7 +14,7 @@ This repository also contains the earlier Cloudflare **X Intelligence Engine** (
 - Android X: clipboard + open the post (X Android drops `in_reply_to` on incoming compose links)
 - Reddit: clipboard + open the post
 
-You then confirm “I posted it.” That writes the Reply Log. There is no X/Reddit write API for replies in this app. Scheduled **Post Ideas** (Phase 2) are the only server-side publish path, and only for original posts whose exact text you approved.
+You then confirm “I posted it.” That writes the Reply Log. There is no X/Reddit write API for replies in this app. Scheduled **Post Ideas** are the only server-side publish path, and only for original posts whose exact text you approved.
 
 ## Adapters
 
@@ -22,9 +22,9 @@ Discovery sits behind a `SocialAdapter` interface (`apps/liveround/src/lib/adapt
 
 | Adapter | When |
 | --- | --- |
-| `MockXAdapter` | Default. Used whenever `X_CLIENT_ID` / `X_CLIENT_SECRET` are missing. Settings shows a banner — this is not production X. |
+| `MockXAdapter` | Default. Used whenever `X_CLIENT_ID` / `X_CLIENT_SECRET` and `X_BEARER_TOKEN` are missing. Settings shows a banner — this is not production X. |
+| `ProductionXAdapter` | Official `GET /2/tweets/search/recent` when keys exist. Connect the acting account via OAuth (`/api/oauth/x/start`). |
 | `RedditAdapter` | Official Reddit OAuth (application-only). Validates subreddits on add. Falls back to a labelled demo card if keys are missing. |
-| X production | Phase 2, same interface, only if keys exist. |
 
 Scanning runs **only while a round is LIVE**. Paused and idle time are free. Posts older than 24 hours drop. Replied and passed cards never return.
 
@@ -59,7 +59,7 @@ Set `DATABASE_URL` to a Neon connection string, then:
 
 ```bash
 pnpm --filter liveround db:push
-# or apply apps/liveround/drizzle/0001_init.sql in the Neon SQL editor
+# or apply apps/liveround/drizzle/0001_init.sql then 0002_phase2.sql in the Neon SQL editor
 ```
 
 Without `DATABASE_URL`, LiveRound keeps state in the server process. That resets on restart and does not survive Vercel serverless.
@@ -77,6 +77,15 @@ Without `DATABASE_URL`, LiveRound keeps state in the server process. That resets
 Two pools: plan credits (reset with the billing period) and permanent credits (never expire). Spend plan first. Start requires a small balance. Ticks are **one credit per minute of LIVE time**, keyed by `sessionId + minute` so reconnects do not double-charge. Heartbeats while paused do not tick.
 
 New accounts get a 7-day trial and 50 plan credits so a founder can run a round tomorrow.
+
+## Phase 2
+
+- **X OAuth** — PKCE, tokens encrypted at rest. Missing keys keep the mock adapter.
+- **Search volume** — quiet / noisy warnings while adding rules. Optional min-follower cutoff on the campaign.
+- **Post Ideas** — after ~12 X replies in a round, distill standalone posts. Approve exact text. Cron `/api/cron/post-ideas` publishes originals only (`POST /2/tweets` with `{ text }`).
+- **Stripe** — Scout / Hunter / Apex + credit packs. Catalog is visible without keys; checkout is not faked. Failed payment pauses rounds.
+- **Contacts** — last-30-days reciprocal score. One outbound reply is not a contact.
+- **Morning recap** — `/api/cron/recap` if Resend is configured. Missed-queue subjects state the count and topic.
 
 ## Legacy engine
 
