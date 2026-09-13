@@ -44,14 +44,14 @@ export function classifyVolume(count24h: number): VolumeReport["band"] {
   return "ok";
 }
 
-export function volumeMessage(band: VolumeReport["band"], count24h: number, query: string): string {
+export function volumeMessage(band: VolumeReport["band"], count24h: number): string {
   if (band === "quiet") {
-    return `“${query}” looks too quiet (~${count24h} posts in 24h). Broaden the rule or this round will stall.`;
+    return `Too quiet (~${count24h} posts in 24h). Broaden the rule or this round will stall.`;
   }
   if (band === "noisy") {
-    return `“${query}” looks too noisy (~${count24h}+ posts in 24h). Tighten the rule or raise the follower cutoff.`;
+    return `Too noisy (~${count24h}+ posts in 24h). Tighten the rule or raise the follower cutoff.`;
   }
-  return `“${query}” looks workable (~${count24h} posts in 24h).`;
+  return `Workable (~${count24h} posts in 24h).`;
 }
 
 export async function xGet<T>(

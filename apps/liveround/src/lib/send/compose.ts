@@ -52,8 +52,12 @@ export function voteUrl(post: SocialPost): string {
   return post.url;
 }
 
-export function dmUrl(handle: string): string {
-  return `https://x.com/messages/compose?recipient_id=${encodeURIComponent(handle)}`;
+/** X DM compose needs a numeric user id. Fall back to the profile when we only have a handle. */
+export function dmUrl(post: Pick<SocialPost, "authorId" | "authorHandle">): string {
+  if (/^\d+$/.test(post.authorId)) {
+    return `https://x.com/messages/compose?recipient_id=${post.authorId}`;
+  }
+  return `https://x.com/${encodeURIComponent(post.authorHandle.replace(/^@/, ""))}`;
 }
 
 /** Guard used in tests — keep the reply surface client-only. */

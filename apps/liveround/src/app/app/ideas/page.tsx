@@ -9,15 +9,22 @@ export default function IdeasPage() {
   const [ideas, setIdeas] = useState<PostIdea[]>([]);
   const [posting, setPosting] = useState<PostingSettings | null>(null);
   const [min, setMin] = useState(12);
+  const [toward, setToward] = useState(0);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/ideas");
-    const data = (await res.json()) as { ideas?: PostIdea[]; posting?: PostingSettings; distillMin?: number };
+    const data = (await res.json()) as {
+      ideas?: PostIdea[];
+      posting?: PostingSettings;
+      distillMin?: number;
+      xRepliesTowardDistill?: number;
+    };
     setIdeas(data.ideas ?? []);
     setPosting(data.posting ?? null);
     if (data.distillMin) setMin(data.distillMin);
+    setToward(data.xRepliesTowardDistill ?? 0);
   }
 
   useEffect(() => {
@@ -51,9 +58,14 @@ export default function IdeasPage() {
       </p>
       {posting ? (
         <p className="mt-2 text-sm text-faint">
-          {posting.postsPerDay}/day between {posting.windowStart}–{posting.windowEnd} {posting.timezone}.
+          {posting.postsPerDay}/day between {posting.windowStart}–{posting.windowEnd} {posting.timezone}. Last round:{" "}
+          {Math.min(toward, min)} / {min} X replies toward a distill.
         </p>
-      ) : null}
+      ) : (
+        <p className="mt-2 text-sm text-faint">
+          Last round: {Math.min(toward, min)} / {min} X replies toward a distill.
+        </p>
+      )}
       {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
       {open.length === 0 ? (
         <p className="mt-10 text-muted">None waiting. Finish a round with enough X replies and they will land here.</p>

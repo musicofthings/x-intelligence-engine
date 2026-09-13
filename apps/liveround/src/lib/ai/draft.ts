@@ -64,14 +64,34 @@ export function buildDraftPrompt(input: {
   return { system: SYSTEM, user, maxChars };
 }
 
+/** Head noun phrase from a product sentence — skips leading articles and trailing "for/who" clauses. */
+export function productPhrase(building: string): string {
+  const clause = building.trim().split(/[.!?]/)[0] ?? building;
+  const stripped = clause.replace(/^(a|an|the)\s+/i, "").trim();
+  const head = stripped.split(/\s+(?:for|that|which|who|to help|to)\s+/i)[0]?.trim() ?? stripped;
+  const words = head.split(/\s+/).filter(Boolean);
+  return words.slice(0, 4).join(" ") || "this";
+}
+
+/** Audience noun phrase — first clause before "who", without a leading article. */
+export function audiencePhrase(reaching: string): string {
+  const clause = reaching.trim().split(/[.!?]/)[0] ?? reaching;
+  const head = clause.split(/\s+who\s+/i)[0]?.trim() ?? clause;
+  const words = head
+    .split(/\s+/)
+    .filter((w) => w && !/^(a|an|the)$/i.test(w));
+  return words.slice(0, 3).join(" ") || "your audience";
+}
+
 function heuristicDraft(post: SocialPost, campaign: Campaign, maxChars: number): string {
-  const snippet = post.body.replace(/\s+/g, " ").trim().slice(0, 90);
-  const about = campaign.building.split(/[.!?]/)[0]?.trim() || "this kind of work";
+  const snippet = post.body.replace(/\s+/g, " ").trim().slice(0, 72);
+  const about = productPhrase(campaign.building);
+  const budget = Math.max(80, Math.min(maxChars - 36, 240));
   const text =
     post.network === "x"
-      ? `The “${snippet}” bit is the actual constraint. I've been treating original posts as the engine and watching comments do the real work — same pattern on ${about}.`
-      : `That line about ${snippet.toLowerCase()} is the part most tools ignore. We've been running a 15-minute live pass instead of a scheduler, specifically so the reply is still in a living thread.`;
-  return text.slice(0, maxChars);
+      ? `That constraint is the real one. Original posts don’t pull — the live comments do. Same pattern on ${about}.`
+      : `That line about ${snippet.toLowerCase()} is the part most tools ignore. A 15-minute live pass beats a scheduler when the thread is still alive.`;
+  return text.slice(0, budget);
 }
 
 export async function generateDraft(input: {
@@ -121,16 +141,18 @@ export async function thinkForMe(building: string, reaching: string, site?: stri
   searchRules: { query: string; source: "generated" }[];
   subreddits: { name: string; title: string; description: string; members: number }[];
 }> {
-  const name = building.split(/[,.]/)[0]?.trim().slice(0, 42) || "Primary";
+  const product = productPhrase(building);
+  const audience = audiencePhrase(reaching);
+  const name = product.slice(0, 42) || "Primary";
   const fallback = {
     name,
-    strategyX: `Talk to people already asking about ${reaching}. Reply with specifics from how you build ${building}. No pitches unless asked.`,
-    strategyReddit: `Join subreddit threads where ${reaching} are comparing tools or asking for workflow advice. Be useful first.`,
-    filterDoc: `Dream post: someone in ${reaching} describing a live problem that ${building} actually solves.\nReject even if keywords match: hiring spam, giveaway bait, “comment YES”, crypto, generic motivation.`,
+    strategyX: `Talk to ${audience} already asking in public. Reply with specifics from how you build ${product}. No pitches unless asked.`,
+    strategyReddit: `Join subreddit threads where ${audience} compare tools or ask for workflow advice. Be useful first.`,
+    filterDoc: `Dream post: ${audience} describing a live problem that ${product} actually solves.\nReject even if keywords match: hiring spam, giveaway bait, “comment YES”, crypto, generic motivation.`,
     searchRules: [
-      { query: `${reaching}`, source: "generated" as const },
-      { query: `"looking for" ${building.split(" ")[0] ?? ""}`, source: "generated" as const },
-      { query: `anyone used ${building.split(" ")[0] ?? "this"}`, source: "generated" as const },
+      { query: audience, source: "generated" as const },
+      { query: `"looking for" ${product}`, source: "generated" as const },
+      { query: `anyone used ${product}`, source: "generated" as const },
     ],
     subreddits: [
       { name: "startups", title: "startups", description: "Startup working threads", members: 0 },

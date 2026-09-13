@@ -376,6 +376,22 @@ export async function getCampaign(id: string): Promise<Campaign | null> {
   return mem().campaigns.get(id) ?? null;
 }
 
+export async function deleteCampaign(id: string, userId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const existing = await getCampaign(id);
+  if (!existing || existing.userId !== userId) return { ok: false, error: "Campaign not found" };
+  const sessions = await listSessions(userId);
+  if (sessions.some((s) => s.campaignId === id && s.state !== "stopped")) {
+    return { ok: false, error: "Stop the live round using this campaign first." };
+  }
+  const db = getDb();
+  if (db) {
+    await db.delete(t.campaigns).where(eq(t.campaigns.id, id));
+  } else {
+    mem().campaigns.delete(id);
+  }
+  return { ok: true };
+}
+
 export async function saveSession(session: RoundSession): Promise<void> {
   const db = getDb();
   if (db) {
@@ -455,7 +471,7 @@ export async function liveSessionForAccount(accountId: string): Promise<RoundSes
   return [...mem().sessions.values()].find((s) => s.actingAccountId === accountId && s.state === "live") ?? null;
 }
 
-async function listSessions(userId: string): Promise<RoundSession[]> {
+export async function listSessions(userId: string): Promise<RoundSession[]> {
   const db = getDb();
   if (db) {
     const rows = await db.select().from(t.roundSessions).where(eq(t.roundSessions.userId, userId));

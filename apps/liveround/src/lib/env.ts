@@ -74,6 +74,10 @@ export function stripeConfigured(): boolean {
   return Boolean(env.stripeSecret);
 }
 
+export function googleConfigured(): boolean {
+  return Boolean(env.googleClientId && env.googleClientSecret);
+}
+
 export function xSearchConfigured(): boolean {
   return xConfigured() || Boolean(env.xBearer);
 }

@@ -1,18 +1,23 @@
 import Link from "next/link";
+import { auth } from "@/auth";
 import { Wordmark } from "@/components/wordmark";
 import { Button } from "@/components/ui/button";
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
+  const enter = session?.user ? "/app/session" : "/login";
+  const signLabel = session?.user ? "Session" : "Sign in";
+
   return (
     <div className="flex flex-1 flex-col">
       <header className="flex items-center justify-between px-6 py-5 md:px-10">
         <Wordmark className="text-lg" />
         <nav className="flex items-center gap-3">
-          <Link href="/login" className="text-sm text-muted hover:text-ink min-h-11 inline-flex items-center">
-            Sign in
+          <Link href={enter} className="text-sm text-muted hover:text-ink min-h-11 inline-flex items-center">
+            {signLabel}
           </Link>
           <Button asChild variant="paper" size="sm">
-            <Link href="/login">Start a round</Link>
+            <Link href={enter}>Start a round</Link>
           </Button>
         </nav>
       </header>
@@ -30,7 +35,7 @@ export default function Home() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild variant="paper">
-              <Link href="/login">Open the cockpit</Link>
+              <Link href={enter}>Open the cockpit</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="#loop">How a round works</Link>
@@ -42,10 +47,10 @@ export default function Home() {
           </p>
         </section>
 
-        <section className="mx-6 mb-16 overflow-hidden rounded-lg border border-line bg-chrome-2 md:mx-10">
-          <div className="flex items-center justify-between border-b border-line px-5 py-3 text-sm">
+        <section className="mx-6 mb-16 rounded-lg border border-line bg-chrome-2 md:mx-10">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-5 py-3 text-sm">
             <Wordmark className="text-base" />
-            <div className="flex items-center gap-4 tabular text-muted">
+            <div className="flex flex-wrap items-center gap-3 tabular text-muted">
               <span className="text-live">Queue live</span>
               <span>12:41</span>
               <span>3 replies · 4 in queue</span>

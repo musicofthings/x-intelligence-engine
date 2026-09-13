@@ -52,14 +52,16 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </form>
         </div>
       </header>
-      <div className="flex gap-4 overflow-x-auto border-b border-line px-4 py-2 md:hidden">
+      <nav className="flex flex-wrap gap-x-4 gap-y-0 border-b border-line px-4 py-1 md:hidden" aria-label="App">
         {NAV.map((item) => (
-          <Link key={item.href} href={item.href} className="shrink-0 text-sm text-muted hover:text-ink min-h-11 inline-flex items-center">
+          <Link key={item.href} href={item.href} className="text-sm text-muted hover:text-ink min-h-11 inline-flex items-center">
             {item.label}
           </Link>
         ))}
+      </nav>
+      <div id="app-main" className="flex-1">
+        {children}
       </div>
-      <div className="flex-1">{children}</div>
     </div>
   );
 }

@@ -21,9 +21,14 @@ export default async function CampaignsPage() {
       ) : (
         <ul className="mt-8 space-y-3">
           {campaigns.map((c) => (
-            <li key={c.id} className="rounded-lg border border-line p-4">
-              <p className="font-medium">{c.name}</p>
-              <p className="mt-1 text-sm text-muted">{c.reaching}</p>
+            <li key={c.id}>
+              <Link href={`/app/campaigns/${c.id}`} className="block rounded-lg border border-line p-4 hover:bg-chrome-2">
+                <p className="font-medium">{c.name}</p>
+                <p className="mt-1 text-sm text-muted">{c.reaching}</p>
+                {c.minFollowers ? (
+                  <p className="mt-1 text-xs text-faint">Min {c.minFollowers} X followers</p>
+                ) : null}
+              </Link>
             </li>
           ))}
         </ul>

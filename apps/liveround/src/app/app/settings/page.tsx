@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import type { PlanCatalog, PackCatalog } from "@/lib/billing/catalog";
@@ -59,20 +60,30 @@ export default function SettingsPage() {
   }, []);
 
   async function save() {
-    await fetch("/api/settings", {
+    const res = await fetch("/api/settings", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ bio, writingNotes: notes, replyLength: length }),
     });
+    if (!res.ok) {
+      toast.error("Could not save writing notes.");
+      return;
+    }
+    toast("Writing notes saved.");
   }
 
   async function savePosting() {
     if (!posting) return;
-    await fetch("/api/ideas", {
+    const res = await fetch("/api/ideas", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ posting }),
     });
+    if (!res.ok) {
+      toast.error("Could not save posting window.");
+      return;
+    }
+    toast("Posting window saved.");
   }
 
   async function checkout(sku: string) {
@@ -131,7 +142,7 @@ export default function SettingsPage() {
       <section>
         <h2 className="font-display text-2xl italic">Accounts</h2>
         <p className="mt-2 text-sm text-muted">
-          OAuth only — we never ask for an X or Reddit password. Reddit app-only search: {redditConfigured ? "yes" : "no"}.
+          {`OAuth only — we never ask for an X or Reddit password. Reddit app-only search: ${redditConfigured ? "yes" : "no"}.`}
         </p>
         <ul className="mt-4 space-y-2 text-sm">
           {accounts.map((a) => (
@@ -206,8 +217,7 @@ export default function SettingsPage() {
       <section className="space-y-4">
         <h2 className="font-display text-2xl italic">Billing</h2>
         <p className="text-sm text-muted">
-          Plan {user?.plan ?? "trial"}
-          {user?.billingPaused ? " · paused after a failed payment" : ""}. Credits packs never expire.
+          {`Plan ${user?.plan ?? "trial"}${user?.billingPaused ? " · paused after a failed payment" : ""}. Credit packs never expire.`}
         </p>
         {!stripeOn ? (
           <p className="text-sm text-pause">

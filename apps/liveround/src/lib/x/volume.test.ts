@@ -16,5 +16,6 @@ describe("search-rule volume", () => {
     expect(report.retryable).toBe(false);
     expect(["quiet", "ok", "noisy"]).toContain(report.band);
     expect(report.message).toMatch(/mock/i);
+    expect(report.message).not.toContain("live conversations");
   });
 });

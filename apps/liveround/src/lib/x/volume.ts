@@ -19,7 +19,7 @@ export async function volumeForQuery(
       query: q,
       count24h,
       band,
-      message: `${volumeMessage(band, count24h, q)} (mock corpus — not production X.)`,
+      message: `${volumeMessage(band, count24h)} (mock corpus — not production X.)`,
       retryable: false,
     };
   }
@@ -36,7 +36,7 @@ export async function volumeForQuery(
   try {
     const count24h = await countRecent(token, `${q} -is:retweet`, fetchImpl);
     const band = classifyVolume(count24h);
-    return { query: q, count24h, band, message: volumeMessage(band, count24h, q), retryable: false };
+    return { query: q, count24h, band, message: volumeMessage(band, count24h), retryable: false };
   } catch (err) {
     if (err instanceof RetryableAdapterError) {
       return {

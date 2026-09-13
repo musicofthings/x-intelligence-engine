@@ -26,7 +26,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${figtree.variable} ${newsreader.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-chrome text-ink font-sans">
-        {children}
+        <a href="#main" className="skip-to-content">
+          Skip to content
+        </a>
+        <div id="main" className="flex min-h-full flex-1 flex-col">
+          {children}
+        </div>
         <Toaster
           theme="dark"
           toastOptions={{

@@ -2,17 +2,30 @@ import { NextResponse } from "next/server";
 import { requireUserId } from "@/auth";
 import { IDEA_DISTILL_MIN_REPLIES, X_CHAR_LIMIT } from "@/lib/types";
 import { getIdea, getPosting, listIdeas, saveIdea, savePosting } from "@/lib/db/store-phase2";
+import { listLogs, listSessions } from "@/lib/db/store";
 import { assignSlot, normalizePosting } from "@/lib/ideas/schedule";
 import { clamp } from "@/lib/utils";
+
+async function distillProgress(userId: string): Promise<{ count: number; min: number }> {
+  const [sessions, logs] = await Promise.all([listSessions(userId), listLogs(userId)]);
+  const latest = [...sessions].sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+  const count = latest ? logs.filter((l) => l.sessionId === latest.id && l.network === "x").length : 0;
+  return { count, min: IDEA_DISTILL_MIN_REPLIES };
+}
 
 export async function GET() {
   try {
     const userId = await requireUserId();
-    const [ideas, posting] = await Promise.all([listIdeas(userId), getPosting(userId)]);
+    const [ideas, posting, progress] = await Promise.all([
+      listIdeas(userId),
+      getPosting(userId),
+      distillProgress(userId),
+    ]);
     return NextResponse.json({
       ideas,
       posting,
-      distillMin: IDEA_DISTILL_MIN_REPLIES,
+      distillMin: progress.min,
+      xRepliesTowardDistill: progress.count,
     });
   } catch {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });

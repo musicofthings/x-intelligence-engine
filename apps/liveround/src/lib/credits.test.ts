@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { intervalIdFor, minuteIndex } from "./credits";
+import { intervalIdFor, minuteIndex, nextChargeableMinute } from "./credits";
 import { shouldHardStop, shouldIdlePause } from "./session/clock";
 import { HARD_CAP_MS, IDLE_PAUSE_MS } from "./types";
 
@@ -8,6 +8,12 @@ describe("credits and session clocks", () => {
     expect(minuteIndex(0)).toBe(0);
     expect(minuteIndex(59_999)).toBe(0);
     expect(minuteIndex(60_000)).toBe(1);
+    expect(nextChargeableMinute(0, -1)).toBeNull();
+    expect(nextChargeableMinute(2_000, -1)).toBeNull();
+    expect(nextChargeableMinute(59_999, -1)).toBeNull();
+    expect(nextChargeableMinute(60_000, -1)).toBe(1);
+    expect(nextChargeableMinute(60_000, 1)).toBeNull();
+    expect(nextChargeableMinute(120_000, 1)).toBe(2);
   });
 
   it("builds idempotent interval ids", () => {

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildReplySend, serverMustNotPublishReplies } from "./compose";
+import { buildReplySend, dmUrl, serverMustNotPublishReplies } from "./compose";
 import type { SocialPost } from "../types";
 
 const post: SocialPost = {
@@ -39,6 +39,13 @@ describe("human-press send path", () => {
     expect(android.method).toBe("clipboard-open");
     expect(android.openUrl).toBe(post.url);
     expect(serverMustNotPublishReplies()).toBe(true);
+  });
+
+  it("uses numeric author id for X DMs, otherwise the profile", () => {
+    expect(dmUrl({ ...post, authorId: "12345", authorHandle: "mira" })).toBe(
+      "https://x.com/messages/compose?recipient_id=12345",
+    );
+    expect(dmUrl({ ...post, authorId: "mira", authorHandle: "mira" })).toBe("https://x.com/mira");
   });
 
   it("contains no server-side reply publish path in LiveRound source", () => {

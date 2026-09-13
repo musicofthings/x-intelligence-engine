@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
 import { formatHumanTime, formatMmSs } from "@/lib/utils";
-import { charLimitFor } from "@/lib/send/compose";
+import { charLimitFor, dmUrl } from "@/lib/send/compose";
 import type { Campaign, Network, SafetyReport, SessionSnapshot } from "@/lib/types";
 
 async function action(body: unknown): Promise<SessionSnapshot> {
@@ -327,7 +327,7 @@ export function SessionCockpit({
                   Rewrite
                 </Button>
               </div>
-              <div className="mt-6 flex flex-wrap gap-2">
+              <div className="mt-6 flex flex-wrap gap-2 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-10 max-md:border-t max-md:border-line max-md:bg-chrome max-md:px-4 max-md:py-3">
                 <Button variant="paper" onClick={onReply}>
                   Reply
                 </Button>
@@ -335,13 +335,13 @@ export function SessionCockpit({
                   Pass — teaches the filter
                 </Button>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-sm">
+              <div className="mt-3 flex flex-wrap gap-2 text-sm max-md:pb-24">
                 {card.post.network === "x" ? (
                   <>
                     <a className="min-h-11 inline-flex items-center text-muted hover:text-ink" href={card.post.url} target="_blank" rel="noreferrer">
                       Like
                     </a>
-                    <a className="min-h-11 inline-flex items-center text-muted hover:text-ink" href={`https://x.com/messages/compose?recipient_id=${card.post.authorHandle}`} target="_blank" rel="noreferrer">
+                    <a className="min-h-11 inline-flex items-center text-muted hover:text-ink" href={dmUrl(card.post)} target="_blank" rel="noreferrer">
                       DM
                     </a>
                   </>

@@ -25,17 +25,7 @@ export default async function StatsPage() {
       </dl>
       <div className="mt-12">
         <h2 className="font-display text-2xl italic">Followers</h2>
-        <p className="mt-2 text-sm text-muted">No X analytics yet. Session days will mark this chart later.</p>
-        <div className="mt-6 flex h-32 items-end gap-1">
-          {Array.from({ length: 14 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded-sm bg-chrome-2"
-              style={{ height: `${20 + ((i * 17) % 70)}%` }}
-              aria-hidden
-            />
-          ))}
-        </div>
+        <p className="mt-2 text-sm text-muted">No X analytics yet. Session days will mark this later.</p>
       </div>
     </div>
   );

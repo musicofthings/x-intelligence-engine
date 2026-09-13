@@ -9,6 +9,7 @@ import type { SearchRule, SocialPost, SubredditRef, VolumeReport } from "@/lib/t
 export function OnboardingWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [campaignId, setCampaignId] = useState<string | null>(null);
   const [building, setBuilding] = useState("");
   const [reaching, setReaching] = useState("");
   const [site, setSite] = useState("");
@@ -30,7 +31,15 @@ export function OnboardingWizard() {
     const res = await fetch("/api/campaigns", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ building, reaching, site, think: true, previewNetworks: ["x", "reddit"] }),
+      body: JSON.stringify({
+        id: campaignId ?? undefined,
+        building,
+        reaching,
+        site,
+        think: true,
+        persist: false,
+        previewNetworks: ["x", "reddit"],
+      }),
     });
     const data = await res.json();
     setBusy(false);
@@ -38,6 +47,7 @@ export function OnboardingWizard() {
       setError(data.error);
       return;
     }
+    setCampaignId(data.campaign.id);
     setFilterDoc(data.campaign.filterDoc);
     setStrategyX(data.campaign.strategyX);
     setStrategyReddit(data.campaign.strategyReddit);
@@ -52,10 +62,12 @@ export function OnboardingWizard() {
 
   async function saveAndPreview() {
     setBusy(true);
+    setError(null);
     const res = await fetch("/api/campaigns", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        id: campaignId ?? undefined,
         building,
         reaching,
         filterDoc,
@@ -73,12 +85,20 @@ export function OnboardingWizard() {
       setError(data.error);
       return;
     }
+    setCampaignId(data.campaign.id);
     setPreview(data.preview ?? []);
     setStep(3);
   }
 
   async function finish() {
-    await fetch("/api/onboarding/complete", { method: "POST" });
+    setBusy(true);
+    setError(null);
+    const res = await fetch("/api/onboarding/complete", { method: "POST" });
+    if (!res.ok) {
+      setBusy(false);
+      setError("Could not finish setup.");
+      return;
+    }
     router.push("/app/session");
     router.refresh();
   }
@@ -114,7 +134,13 @@ export function OnboardingWizard() {
       {step === 0 ? (
         <div className="mt-6 space-y-4">
           <h1 className="font-display text-4xl italic">What are you building?</h1>
-          <Textarea value={building} onChange={(e) => setBuilding(e.target.value)} placeholder="A cockpit for founders who reply in public." />
+          <Label htmlFor="building">What you are building</Label>
+          <Textarea
+            id="building"
+            value={building}
+            onChange={(e) => setBuilding(e.target.value)}
+            placeholder="A cockpit for founders who reply in public."
+          />
           <Button variant="paper" disabled={!building.trim()} onClick={() => setStep(1)}>
             Continue
           </Button>
@@ -123,14 +149,23 @@ export function OnboardingWizard() {
       {step === 1 ? (
         <div className="mt-6 space-y-4">
           <h1 className="font-display text-4xl italic">Who do you want to reach?</h1>
-          <Textarea value={reaching} onChange={(e) => setReaching(e.target.value)} placeholder="Founders who already hang out in live product threads." />
+          <Label htmlFor="reaching">Who you want to reach</Label>
+          <Textarea
+            id="reaching"
+            value={reaching}
+            onChange={(e) => setReaching(e.target.value)}
+            placeholder="Founders who already hang out in live product threads."
+          />
           <Label htmlFor="site">Site or name (optional)</Label>
           <Input id="site" value={site} onChange={(e) => setSite(e.target.value)} placeholder="yoursite.com" />
           <div className="flex flex-wrap gap-2">
-            <Button variant="paper" disabled={!reaching.trim() || busy} onClick={think}>
-              Think for me
+            <Button variant="outline" onClick={() => setStep(0)}>
+              Back
             </Button>
-            <Button variant="outline" disabled={!reaching.trim()} onClick={() => setStep(2)}>
+            <Button variant="paper" disabled={!reaching.trim() || busy} onClick={think}>
+              {busy ? "Thinking…" : "Think for me"}
+            </Button>
+            <Button variant="outline" disabled={!reaching.trim() || busy} onClick={() => setStep(2)}>
               I’ll write it
             </Button>
           </div>
@@ -139,27 +174,36 @@ export function OnboardingWizard() {
       {step === 2 ? (
         <div className="mt-6 space-y-5">
           <h1 className="font-display text-4xl italic">Filter and rules</h1>
-          <Label>AI filter</Label>
-          <Textarea value={filterDoc} onChange={(e) => setFilterDoc(e.target.value)} />
-          <Label>X strategy</Label>
-          <Textarea value={strategyX} onChange={(e) => setStrategyX(e.target.value)} />
-          <Label>Reddit strategy</Label>
-          <Textarea value={strategyReddit} onChange={(e) => setStrategyReddit(e.target.value)} />
-          <Label>X search rules</Label>
-          <Input
-            placeholder="Add a rule and press Enter"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const q = e.currentTarget.value.trim();
-                if (q) {
-                  setRules((r) => [...r, { query: q, source: "manual" }]);
-                  void checkVolume(q);
+          <div className="space-y-2">
+            <Label htmlFor="filter">AI filter</Label>
+            <Textarea id="filter" value={filterDoc} onChange={(e) => setFilterDoc(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sx">X strategy</Label>
+            <Textarea id="sx" value={strategyX} onChange={(e) => setStrategyX(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sr">Reddit strategy</Label>
+            <Textarea id="sr" value={strategyReddit} onChange={(e) => setStrategyReddit(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rule">X search rules</Label>
+            <Input
+              id="rule"
+              placeholder="Add a rule and press Enter"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const q = e.currentTarget.value.trim();
+                  if (q) {
+                    setRules((r) => [...r, { query: q, source: "manual" }]);
+                    void checkVolume(q);
+                  }
+                  e.currentTarget.value = "";
                 }
-                e.currentTarget.value = "";
-              }
-            }}
-          />
+              }}
+            />
+          </div>
           <ul className="text-sm text-muted">
             {rules.map((r) => (
               <li key={r.query} className="flex justify-between gap-2 py-1">
@@ -187,9 +231,9 @@ export function OnboardingWizard() {
             placeholder="0 — off"
             onChange={(e) => setMinFollowers(Math.max(0, Number(e.target.value) || 0))}
           />
-          <Label>Subreddits</Label>
+          <Label htmlFor="sub">Subreddits</Label>
           <div className="flex gap-2">
-            <Input value={subInput} onChange={(e) => setSubInput(e.target.value)} placeholder="startups" />
+            <Input id="sub" value={subInput} onChange={(e) => setSubInput(e.target.value)} placeholder="startups" />
             <Button variant="outline" type="button" onClick={addSub}>
               Add
             </Button>
@@ -204,9 +248,14 @@ export function OnboardingWizard() {
               </li>
             ))}
           </ul>
-          <Button variant="paper" disabled={busy} onClick={saveAndPreview}>
-            Preview matching posts
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={busy} onClick={() => setStep(1)}>
+              Back
+            </Button>
+            <Button variant="paper" disabled={busy} onClick={saveAndPreview}>
+              {busy ? "Previewing…" : "Preview matching posts"}
+            </Button>
+          </div>
         </div>
       ) : null}
       {step === 3 ? (
@@ -226,11 +275,11 @@ export function OnboardingWizard() {
             <p className="text-sm text-faint">{preview.length - 1} more stacked behind this one.</p>
           ) : null}
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setStep(2)}>
+            <Button variant="outline" disabled={busy} onClick={() => setStep(2)}>
               Edit docs
             </Button>
-            <Button variant="paper" onClick={finish} disabled={preview.length === 0}>
-              Finish setup
+            <Button variant="paper" onClick={finish} disabled={preview.length === 0 || busy}>
+              {busy ? "Finishing…" : "Finish setup"}
             </Button>
           </div>
         </div>
