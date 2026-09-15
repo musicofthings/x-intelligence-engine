@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { auth } from "@/auth";
+import { sessionUser } from "@/auth";
 import { Wordmark } from "@/components/wordmark";
 import { Button } from "@/components/ui/button";
 
 export default async function Home() {
-  const session = await auth();
-  const enter = session?.user ? "/app/session" : "/login";
-  const signLabel = session?.user ? "Session" : "Sign in";
+  const user = await sessionUser();
+  const enter = user ? "/app/session" : "/login";
+  const signLabel = user ? "Session" : "Sign in";
 
   return (
     <div className="flex flex-1 flex-col">

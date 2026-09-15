@@ -1,9 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { auth, signOut } from "@/auth";
+import { requirePageUser, signOut } from "@/auth";
 import { Wordmark } from "@/components/wordmark";
-import { getUserById } from "@/lib/db/store";
-import { redirect } from "next/navigation";
 
 const NAV = [
   { href: "/app/session", label: "Session" },
@@ -16,9 +14,7 @@ const NAV = [
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const user = await getUserById(session.user.id);
+  const user = await requirePageUser();
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -36,10 +32,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm text-muted">
-          <span className="hidden sm:inline tabular">
-            {user ? `${user.planCredits + user.permanentCredits} cr` : ""}
-          </span>
-          <span className="hidden sm:inline truncate max-w-40">{session.user.email}</span>
+          <span className="hidden sm:inline tabular">{`${user.planCredits + user.permanentCredits} cr`}</span>
+          <span className="hidden sm:inline truncate max-w-40">{user.email}</span>
           <form
             action={async () => {
               "use server";

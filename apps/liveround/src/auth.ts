@@ -2,7 +2,9 @@ import NextAuth, { type NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { appUrl, authSecret, env } from "@/lib/env";
-import { consumeMagic, ensureUser } from "@/lib/db/store";
+import { consumeMagic, ensureUser, getUserById } from "@/lib/db/store";
+import type { UserRecord } from "@/lib/types";
+import { redirect } from "next/navigation";
 
 const providers: NextAuthConfig["providers"] = [];
 
@@ -57,10 +59,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 });
 
 export async function requireUserId(): Promise<string> {
+  const user = await sessionUser();
+  if (!user) throw new Error("UNAUTHENTICATED");
+  return user.id;
+}
+
+/** JWT session whose user still exists in the store. Null if signed out or orphaned. */
+export async function sessionUser(): Promise<UserRecord | null> {
   const session = await auth();
   const id = session?.user?.id;
-  if (!id) throw new Error("UNAUTHENTICATED");
-  return id;
+  if (!id) return null;
+  return getUserById(id);
+}
+
+/** Route that may modify cookies and clear an Auth.js JWT with no store row. */
+export const STALE_SESSION_PATH = "/api/auth/stale";
+
+/**
+ * For Server Components. Redirects instead of calling signOut (cookies cannot
+ * be modified during RSC render).
+ */
+export async function requirePageUser(): Promise<UserRecord> {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  const user = await getUserById(session.user.id);
+  if (!user) redirect(STALE_SESSION_PATH);
+  return user;
 }
 
 export { appUrl };

@@ -1,13 +1,11 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import { requirePageUser } from "@/auth";
 import { listLogs } from "@/lib/db/store";
 import { snapshotFor } from "@/lib/session/engine";
 import { formatMmSs } from "@/lib/utils";
 
 export default async function StatsPage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const [logs, snap] = await Promise.all([listLogs(session.user.id), snapshotFor(session.user.id)]);
+  const user = await requirePageUser();
+  const [logs, snap] = await Promise.all([listLogs(user.id), snapshotFor(user.id)]);
   const replies = logs.length;
   const live = snap.session?.liveMs ?? 0;
   return (
